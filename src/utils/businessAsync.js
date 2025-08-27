@@ -237,10 +237,31 @@ export async function checkout({
     // Save to database
     const bill = await dbService.createBill(userId, billData, billItems)
 
+    // Transform bill to match UI expectations
+    const transformedBill = {
+      ...bill,
+      invoiceNo: bill.invoice_no,
+      createdAt: bill.created_at,
+      updatedAt: bill.updated_at,
+      dueDate: bill.due_date,
+      customerName: bill.customer_name,
+      customerPhone: bill.customer_phone,
+      customerReligion: bill.customer_religion,
+      customerGeneral: bill.customer_general,
+      customerId: bill.customer_id,
+      customer: bill.customer_name ? {
+        id: bill.customer_id,
+        name: bill.customer_name,
+        phone: bill.customer_phone,
+        religion: bill.customer_religion,
+        general: bill.customer_general
+      } : null
+    }
+
     // Update local state
     setState((prev) => ({
       ...prev,
-      bills: [bill, ...prev.bills],
+      bills: [transformedBill, ...prev.bills],
       cart: []
     }))
 
@@ -250,8 +271,12 @@ export async function checkout({
       if (product) {
         const newQty = Math.max(0, product.qty - cartItem.qty)
         await dbService.updateProduct(userId, product.id, { 
-          ...product, 
-          qty: newQty 
+          name: product.name,
+          category: product.category,
+          description: product.description,
+          price: product.price,
+          qty: newQty,
+          low_at: product.lowAt || product.low_at || 5
         })
         
         setState((prev) => ({

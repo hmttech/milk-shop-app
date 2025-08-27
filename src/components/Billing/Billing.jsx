@@ -1,7 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { currency, parseNum } from '../../utils/helpers.js';
 import { addToCart, updateCartQty, removeFromCart } from '../../utils/business.js';
-import { checkout } from '../../utils/businessAsync.js';
+import { checkout as checkoutAsync } from '../../utils/businessAsync.js';
+import { checkout as checkoutLocal } from '../../utils/business.js';
 
 function Billing({ state, setState, setNotif, setTab, user }) {
   const [customerName, setCustomerName] = useState('');
@@ -22,19 +23,37 @@ function Billing({ state, setState, setNotif, setTab, user }) {
 
   async function handleCheckout(e) {
     e.preventDefault();
-    await checkout({
-      userId: user.id,
-      setState,
-      state,
-      setNotif,
-      setTab,
-      customerName,
-      customerPhone,
-      status,
-      discount,
-      religion,
-      general,
-    });
+    
+    // Use local checkout if no user (local mode), otherwise use async checkout
+    if (user?.id) {
+      await checkoutAsync({
+        userId: user.id,
+        setState,
+        state,
+        setNotif,
+        setTab,
+        customerName,
+        customerPhone,
+        status,
+        discount,
+        religion,
+        general,
+      });
+    } else {
+      // Local mode checkout
+      checkoutLocal({
+        setState,
+        state,
+        setNotif,
+        setTab,
+        customerName,
+        customerPhone,
+        status,
+        discount,
+        religion,
+        general,
+      });
+    }
   }
 
   const cartSubtotal = state.cart.reduce((s, c) => s + c.price * c.qty, 0);
