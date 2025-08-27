@@ -47,13 +47,20 @@ A modern React-based milk shop management system with complete inventory, billin
 - Marketing campaign management
 
 ### 💾 **Data Management**
-- Local storage persistence
+- **Cloud Storage**: Supabase database integration
+- **Multi-User Support**: Secure user authentication
+- **Data Isolation**: Row Level Security (RLS)
+- **Real-time Sync**: Cloud-based data persistence
+- **Migration**: Automatic localStorage to Supabase migration
+- **Backup/Export**: JSON export functionality
 - Export/Import backup functionality
 - Data validation and error handling
 
 ## Technology Stack
 
 - **Frontend**: React 19 with Vite
+- **Database**: Supabase (PostgreSQL)
+- **Authentication**: Supabase Auth
 - **PDF Generation**: jsPDF
 - **Charts**: Chart.js  
 - **Styling**: CSS with custom variables
@@ -64,6 +71,7 @@ A modern React-based milk shop management system with complete inventory, billin
 
 ### Prerequisites
 - Node.js 18+ and npm
+- Supabase account (for database and authentication)
 
 ### Installation
 
@@ -78,14 +86,27 @@ A modern React-based milk shop management system with complete inventory, billin
    npm install
    ```
 
-3. **Start development server**
+3. **Set up Supabase**
+   - Follow the detailed guide in [SUPABASE_SETUP.md](./SUPABASE_SETUP.md)
+   - Create a Supabase project
+   - Run the database schema
+   - Configure environment variables
+
+4. **Configure environment**
+   ```bash
+   cp .env.example .env
+   # Edit .env with your Supabase credentials
+   ```
+
+5. **Start development server**
    ```bash
    npm run dev
    ```
 
-4. **Open in browser**
+6. **Open in browser**
    - Navigate to `http://localhost:3000`
-   - The app will open with sample products loaded
+   - Create an account or sign in
+   - The app will automatically set up default products
 
 ### Production Build
 

@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { currency, parseNum, uid } from '../../utils/helpers.js';
-import { addOrUpdateProduct, removeProduct, addToCart } from '../../utils/business.js';
+import { currency, parseNum } from '../../utils/helpers.js';
+import { addOrUpdateProduct, removeProduct } from '../../utils/businessAsync.js';
+import { addToCart } from '../../utils/business.js';
 
-function Products({ state, setState, editingProduct, setEditingProduct }) {
+function Products({ state, setState, editingProduct, setEditingProduct, setNotif, user }) {
   const [q, setQ] = useState('');
   const [form, setForm] = useState(
     editingProduct || {
@@ -32,11 +33,11 @@ function Products({ state, setState, editingProduct, setEditingProduct }) {
     [editingProduct]
   );
 
-  function submit(e) {
+  async function submit(e) {
     e.preventDefault();
     if (!form.name.trim()) return;
-    addOrUpdateProduct(setState, setEditingProduct, {
-      id: form.id || uid(),
+    await addOrUpdateProduct(user.id, setState, setEditingProduct, setNotif, {
+      id: form.id,
       name: form.name.trim(),
       category: form.category.trim(),
       description: form.description.trim(),
@@ -176,7 +177,7 @@ function Products({ state, setState, editingProduct, setEditingProduct }) {
             </div>
             <div className="row right" style={{ marginTop: 8 }}>
               <button onClick={() => setEditingProduct(p)}>Edit</button>
-              <button className="warn" onClick={() => removeProduct(setState, p.id)}>
+              <button className="warn" onClick={() => removeProduct(user.id, setState, setNotif, p.id)}>
                 Delete
               </button>
               <button className="primary" onClick={() => addToCart(setState, p, 1)}>
