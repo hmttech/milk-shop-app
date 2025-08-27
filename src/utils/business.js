@@ -3,6 +3,65 @@ import { genInvoiceNumber } from './generators.js';
 import { genPDF } from './pdf.js';
 import { downloadFile } from './storage.js';
 
+// Product management functions
+export function addOrUpdateProduct(setState, setEditingProduct, p) {
+  setState(prev => {
+    const exists = prev.products.some(x => x.id === p.id);
+    const products = exists
+      ? prev.products.map(x => x.id === p.id ? p : x)
+      : [{ ...p, id: uid() }, ...prev.products];
+    return { ...prev, products };
+  });
+  setEditingProduct(null);
+}
+
+export function removeProduct(setState, id) {
+  setState(prev => ({ ...prev, products: prev.products.filter(p => p.id !== id) }));
+}
+
+// Customer management functions
+export function addOrUpdateCustomer(setState, setNotif, form, editingId, state) {
+  const name = form.name.trim();
+  const phone = form.phone.trim();
+  if (!name) return;
+  
+  if (phone && state.customers.some(c => c.phone === phone && c.id !== editingId)) {
+    setNotif("Customer with this phone already exists.");
+    setTimeout(() => setNotif(""), 2000);
+    return;
+  }
+  
+  if (editingId) {
+    setState(prev => ({
+      ...prev,
+      customers: prev.customers.map(c => c.id === editingId ? { ...c, ...form } : c)
+    }));
+    setNotif("Customer updated.");
+  } else {
+    const cust = { id: uid(), name, phone, religion: form.religion, general: form.general, createdAt: todayISO() };
+    setState(prev => ({ ...prev, customers: [cust, ...prev.customers] }));
+    setNotif("Customer added.");
+  }
+  
+  setTimeout(() => setNotif(""), 1500);
+  return { name: "", phone: "", religion: "", general: true };
+}
+
+export function deleteCustomer(setState, setNotif, id, editingId, setEditingId, setForm) {
+  if (window.confirm("Delete this customer?")) {
+    setState(prev => ({
+      ...prev,
+      customers: prev.customers.filter(c => c.id !== id)
+    }));
+    setNotif("Customer deleted.");
+    setTimeout(() => setNotif(""), 1500);
+    if (editingId === id) {
+      setForm({ name: "", phone: "", religion: "", general: true });
+      setEditingId(null);
+    }
+  }
+}
+
 export function addToCart(setState, prod, qty = 1) {
   qty = Math.max(1, Math.min(qty, prod.qty));
   setState(prev => {
