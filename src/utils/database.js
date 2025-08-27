@@ -91,6 +91,41 @@ class DatabaseService {
     return data || []
   }
 
+  // User initialization tracking methods
+  async getUserInitialization(userId) {
+    this._checkSupabase()
+    const { data, error } = await supabase
+      .from('user_initialization')
+      .select('*')
+      .eq('user_id', userId)
+      .single()
+
+    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+      throw error
+    }
+
+    return data || { 
+      user_id: userId, 
+      products_initialized: false, 
+      migration_completed: false 
+    }
+  }
+
+  async setUserInitialization(userId, updates) {
+    this._checkSupabase()
+    const { data, error } = await supabase
+      .from('user_initialization')
+      .upsert({
+        user_id: userId,
+        ...updates,
+        updated_at: todayISO()
+      })
+      .select()
+
+    if (error) throw error
+    return data[0]
+  }
+
   async createProduct(userId, product) {
     this._checkSupabase()
     const productData = {
@@ -107,15 +142,25 @@ class DatabaseService {
       .select()
 
     if (error) {
-      // If it's a duplicate key error, try with a new ID
-      if (error.code === '23505') {
+      // If it's a unique constraint violation on (user_id, name), don't retry
+      if (error.code === '23505' && error.message.includes('user_id, name')) {
+        // Product with this name already exists for this user
+        throw new Error(`Product "${product.name}" already exists`)
+      }
+      // If it's a primary key violation, try with a new ID once
+      if (error.code === '23505' && error.message.includes('pkey')) {
         productData.id = uid()
         const { data: retryData, error: retryError } = await supabase
           .from('products')
           .insert(productData)
           .select()
         
-        if (retryError) throw retryError
+        if (retryError) {
+          if (retryError.code === '23505' && retryError.message.includes('user_id, name')) {
+            throw new Error(`Product "${product.name}" already exists`)
+          }
+          throw retryError
+        }
         return retryData[0]
       }
       throw error
@@ -327,9 +372,19 @@ class DatabaseService {
   // Initialize default products for new users
   async initializeDefaultProducts(userId) {
     this._checkSupabase()
-    // First check if products already exist to avoid duplicates
+    
+    // Check initialization status from database first
+    const initStatus = await this.getUserInitialization(userId)
+    if (initStatus.products_initialized) {
+      // Products already initialized, just return existing products
+      return await this.getProducts(userId)
+    }
+
+    // Double-check if products exist (race condition protection)
     const existingProducts = await this.getProducts(userId)
     if (existingProducts.length > 0) {
+      // Mark as initialized and return existing products
+      await this.setUserInitialization(userId, { products_initialized: true })
       return existingProducts
     }
 
@@ -376,29 +431,83 @@ class DatabaseService {
       },
     ]
 
-    const productsData = defaultProducts.map(product => ({
-      id: uid(),
-      user_id: userId,
-      ...product,
-      created_at: todayISO(),
-      updated_at: todayISO()
-    }))
+    try {
+      // Use batch insert with ON CONFLICT handling
+      const productsData = defaultProducts.map(product => ({
+        id: uid(),
+        user_id: userId,
+        ...product,
+        created_at: todayISO(),
+        updated_at: todayISO()
+      }))
 
+      // Use upsert to handle conflicts gracefully
+      const { data, error } = await supabase
+        .from('products')
+        .upsert(productsData, { 
+          onConflict: 'user_id,name',
+          ignoreDuplicates: true 
+        })
+        .select()
+
+      // Mark as initialized regardless of whether products were inserted or already existed
+      await this.setUserInitialization(userId, { products_initialized: true })
+
+      if (error) {
+        // If upsert failed for other reasons, fall back to individual inserts
+        console.warn('Batch upsert failed, falling back to individual inserts:', error)
+        
+        const createdProducts = []
+        for (const product of defaultProducts) {
+          try {
+            const existingProduct = await this.findProductByName(userId, product.name)
+            if (existingProduct) {
+              createdProducts.push(existingProduct)
+            } else {
+              const newProduct = await this.createProduct(userId, product)
+              createdProducts.push(newProduct)
+            }
+          } catch (productError) {
+            // If product creation fails due to constraint, try to find existing
+            if (productError.message.includes('already exists')) {
+              const existingProduct = await this.findProductByName(userId, product.name)
+              if (existingProduct) {
+                createdProducts.push(existingProduct)
+              }
+            } else {
+              console.error(`Failed to create product ${product.name}:`, productError)
+            }
+          }
+        }
+        return createdProducts
+      }
+
+      return data || []
+    } catch (error) {
+      console.error('Error initializing default products:', error)
+      
+      // Even if initialization failed, mark as attempted to prevent infinite retries
+      await this.setUserInitialization(userId, { products_initialized: true })
+      
+      // Return existing products if any
+      return await this.getProducts(userId)
+    }
+  }
+
+  // Helper method to find product by name
+  async findProductByName(userId, name) {
+    this._checkSupabase()
     const { data, error } = await supabase
       .from('products')
-      .insert(productsData)
-      .select()
+      .select('*')
+      .eq('user_id', userId)
+      .eq('name', name)
+      .single()
 
-    if (error) {
-      // If there's a constraint violation, check if products were created by another process
-      if (error.code === '23505') {
-        const existingProducts = await this.getProducts(userId)
-        if (existingProducts.length > 0) {
-          return existingProducts
-        }
-      }
+    if (error && error.code !== 'PGRST116') {
       throw error
     }
+
     return data
   }
 }

@@ -27,7 +27,9 @@ CREATE TABLE IF NOT EXISTS public.products (
     qty INTEGER NOT NULL DEFAULT 0,
     low_at INTEGER NOT NULL DEFAULT 5,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    -- Add unique constraint to prevent duplicate products per user
+    UNIQUE(user_id, name)
 );
 
 -- Create customers table
@@ -134,3 +136,23 @@ CREATE TRIGGER update_shops_updated_at BEFORE UPDATE ON public.shops FOR EACH RO
 CREATE TRIGGER update_products_updated_at BEFORE UPDATE ON public.products FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_customers_updated_at BEFORE UPDATE ON public.customers FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 CREATE TRIGGER update_bills_updated_at BEFORE UPDATE ON public.bills FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Create user initialization tracking table
+CREATE TABLE IF NOT EXISTS public.user_initialization (
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+    products_initialized BOOLEAN DEFAULT false,
+    migration_completed BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Enable RLS on user_initialization table
+ALTER TABLE public.user_initialization ENABLE ROW LEVEL SECURITY;
+
+-- Create RLS policies for user_initialization
+CREATE POLICY "Users can view own initialization status" ON public.user_initialization FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "Users can insert own initialization status" ON public.user_initialization FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Users can update own initialization status" ON public.user_initialization FOR UPDATE USING (auth.uid() = user_id);
+
+-- Create trigger for user_initialization updated_at
+CREATE TRIGGER update_user_initialization_updated_at BEFORE UPDATE ON public.user_initialization FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
