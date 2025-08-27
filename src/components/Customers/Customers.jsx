@@ -1,8 +1,8 @@
 import React, { useState, useMemo } from 'react';
 import { currency } from '../../utils/helpers.js';
-import { addOrUpdateCustomer, deleteCustomer } from '../../utils/business.js';
+import { addOrUpdateCustomer, deleteCustomer } from '../../utils/businessAsync.js';
 
-function Customers({ state, setState, setNotif }) {
+function Customers({ state, setState, setNotif, user }) {
   const [q, setQ] = useState('');
   const [form, setForm] = useState({ name: '', phone: '', religion: '', general: true });
   const [editingId, setEditingId] = useState(null);
@@ -22,9 +22,9 @@ function Customers({ state, setState, setNotif }) {
     return map;
   }, [state.bills]);
 
-  function handleSubmit(e) {
+  async function handleSubmit(e) {
     e.preventDefault();
-    const result = addOrUpdateCustomer(setState, setNotif, form, editingId, state);
+    const result = await addOrUpdateCustomer(user.id, setState, setNotif, form, editingId, state);
     if (result) {
       setForm(result);
       setEditingId(null);
@@ -36,8 +36,8 @@ function Customers({ state, setState, setNotif }) {
     setEditingId(c.id);
   }
 
-  function handleDeleteCustomer(id) {
-    deleteCustomer(setState, setNotif, id, editingId, setEditingId, setForm);
+  async function handleDeleteCustomer(id) {
+    await deleteCustomer(user.id, setState, setNotif, id, editingId, setEditingId, setForm);
   }
 
   function cancelEdit() {

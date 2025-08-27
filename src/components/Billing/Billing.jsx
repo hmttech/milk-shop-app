@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { currency, parseNum } from '../../utils/helpers.js';
-import { addToCart, updateCartQty, removeFromCart, checkout } from '../../utils/business.js';
+import { addToCart, updateCartQty, removeFromCart } from '../../utils/business.js';
+import { checkout } from '../../utils/businessAsync.js';
 
-function Billing({ state, setState, setNotif, setTab }) {
+function Billing({ state, setState, setNotif, setTab, user }) {
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
   const [status, setStatus] = useState('Paid');
@@ -19,9 +20,10 @@ function Billing({ state, setState, setNotif, setTab }) {
     );
   }, [q, state.products]);
 
-  function handleCheckout(e) {
+  async function handleCheckout(e) {
     e.preventDefault();
-    checkout({
+    await checkout({
+      userId: user.id,
       setState,
       state,
       setNotif,
