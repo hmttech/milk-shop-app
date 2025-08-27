@@ -3,10 +3,34 @@ import { currency, parseNum, uid } from '../../utils/helpers.js';
 import { addOrUpdateProduct, removeProduct, addToCart } from '../../utils/business.js';
 
 function Products({ state, setState, editingProduct, setEditingProduct }) {
-  const [q, setQ] = useState("");
-  const [form, setForm] = useState(editingProduct || { id: null, name: "", category: "Milk", description: "", price: 0, qty: 0, lowAt: 5 });
+  const [q, setQ] = useState('');
+  const [form, setForm] = useState(
+    editingProduct || {
+      id: null,
+      name: '',
+      category: 'Milk',
+      description: '',
+      price: 0,
+      qty: 0,
+      lowAt: 5,
+    }
+  );
 
-  useEffect(() => setForm(editingProduct || { id: null, name: "", category: "Milk", description: "", price: 0, qty: 0, lowAt: 5 }), [editingProduct]);
+  useEffect(
+    () =>
+      setForm(
+        editingProduct || {
+          id: null,
+          name: '',
+          category: 'Milk',
+          description: '',
+          price: 0,
+          qty: 0,
+          lowAt: 5,
+        }
+      ),
+    [editingProduct]
+  );
 
   function submit(e) {
     e.preventDefault();
@@ -18,32 +42,51 @@ function Products({ state, setState, editingProduct, setEditingProduct }) {
       description: form.description.trim(),
       price: parseNum(form.price),
       qty: parseNum(form.qty),
-      lowAt: parseNum(form.lowAt) || 5
+      lowAt: parseNum(form.lowAt) || 5,
     });
   }
 
-  const filtered = state.products.filter(p => {
-    const s = (q || "").toLowerCase();
-    return [p.name, p.category, p.description].join(" ").toLowerCase().includes(s);
+  const filtered = state.products.filter((p) => {
+    const s = (q || '').toLowerCase();
+    return [p.name, p.category, p.description].join(' ').toLowerCase().includes(s);
   });
 
   return (
     <div>
-      <div className="row sticky" style={{ gap: 8, padding: "8px 0", marginBottom: 8, borderBottom: "1px solid #eee", background: "#f7f7fb" }}>
+      <div
+        className="row sticky"
+        style={{
+          gap: 8,
+          padding: '8px 0',
+          marginBottom: 8,
+          borderBottom: '1px solid #eee',
+          background: '#f7f7fb',
+        }}
+      >
         <input
           placeholder="Search products..."
           value={q}
-          onChange={e => setQ(e.target.value)}
+          onChange={(e) => setQ(e.target.value)}
           style={{ flex: 1, minWidth: 220 }}
         />
         <button
           className="primary"
-          onClick={() => setEditingProduct({ id: null, name: "", category: "Milk", description: "", price: 0, qty: 0, lowAt: 5 })}
+          onClick={() =>
+            setEditingProduct({
+              id: null,
+              name: '',
+              category: 'Milk',
+              description: '',
+              price: 0,
+              qty: 0,
+              lowAt: 5,
+            })
+          }
         >
           Add Product
         </button>
       </div>
-      
+
       {editingProduct && (
         <form className="card" onSubmit={submit}>
           <div className="grid">
@@ -51,7 +94,7 @@ function Products({ state, setState, editingProduct, setEditingProduct }) {
               <label>Name</label>
               <input
                 value={form.name}
-                onChange={e => setForm({ ...form, name: e.target.value })}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
                 required
               />
             </div>
@@ -59,10 +102,12 @@ function Products({ state, setState, editingProduct, setEditingProduct }) {
               <label>Category</label>
               <select
                 value={form.category}
-                onChange={e => setForm({ ...form, category: e.target.value })}
+                onChange={(e) => setForm({ ...form, category: e.target.value })}
               >
-                {["Milk", "Ghee", "Paneer", "Sweets", "Other"].map(c => (
-                  <option key={c} value={c}>{c}</option>
+                {['Milk', 'Ghee', 'Paneer', 'Sweets', 'Other'].map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
                 ))}
               </select>
             </div>
@@ -72,7 +117,7 @@ function Products({ state, setState, editingProduct, setEditingProduct }) {
                 type="number"
                 step="0.01"
                 value={form.price}
-                onChange={e => setForm({ ...form, price: e.target.value })}
+                onChange={(e) => setForm({ ...form, price: e.target.value })}
               />
             </div>
             <div>
@@ -80,7 +125,7 @@ function Products({ state, setState, editingProduct, setEditingProduct }) {
               <input
                 type="number"
                 value={form.qty}
-                onChange={e => setForm({ ...form, qty: e.target.value })}
+                onChange={(e) => setForm({ ...form, qty: e.target.value })}
               />
             </div>
             <div>
@@ -88,14 +133,14 @@ function Products({ state, setState, editingProduct, setEditingProduct }) {
               <input
                 type="number"
                 value={form.lowAt}
-                onChange={e => setForm({ ...form, lowAt: e.target.value })}
+                onChange={(e) => setForm({ ...form, lowAt: e.target.value })}
               />
             </div>
-            <div style={{ gridColumn: "1/-1" }}>
+            <div style={{ gridColumn: '1/-1' }}>
               <label>Description</label>
               <textarea
                 value={form.description}
-                onChange={e => setForm({ ...form, description: e.target.value })}
+                onChange={(e) => setForm({ ...form, description: e.target.value })}
               />
             </div>
           </div>
@@ -104,14 +149,14 @@ function Products({ state, setState, editingProduct, setEditingProduct }) {
               Cancel
             </button>
             <button className="primary" type="submit">
-              {form.id ? "Update" : "Create"}
+              {form.id ? 'Update' : 'Create'}
             </button>
           </div>
         </form>
       )}
-      
+
       <div className="grid">
-        {filtered.map(p => (
+        {filtered.map((p) => (
           <div key={p.id} className="card">
             <div className="row">
               <strong>{p.name}</strong>
@@ -131,8 +176,12 @@ function Products({ state, setState, editingProduct, setEditingProduct }) {
             </div>
             <div className="row right" style={{ marginTop: 8 }}>
               <button onClick={() => setEditingProduct(p)}>Edit</button>
-              <button className="warn" onClick={() => removeProduct(setState, p.id)}>Delete</button>
-              <button className="primary" onClick={() => addToCart(setState, p, 1)}>Add to Cart</button>
+              <button className="warn" onClick={() => removeProduct(setState, p.id)}>
+                Delete
+              </button>
+              <button className="primary" onClick={() => addToCart(setState, p, 1)}>
+                Add to Cart
+              </button>
             </div>
           </div>
         ))}
