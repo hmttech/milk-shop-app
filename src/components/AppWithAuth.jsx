@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { dbService } from '../utils/database.js'
 import { migrateLocalStorageToSupabase } from '../utils/migration.js'
@@ -25,18 +25,30 @@ function AppWithAuth() {
   const [notif, setNotif] = useState('')
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  
+  // Use ref to track if data is being loaded to prevent double loading
+  const isLoadingRef = useRef(false)
 
   // Load initial data from Supabase
   useEffect(() => {
-    if (!user) return
+    if (!user?.id || isLoadingRef.current) return
+
+    // Prevent duplicate calls by tracking the current user ID
+    let isCancelled = false
+    const currentUserId = user.id
+    isLoadingRef.current = true
 
     const loadData = async () => {
       try {
         setLoading(true)
         setError(null)
         
-        // Run migration - it handles its own completion tracking
-        const migrationResult = await migrateLocalStorageToSupabase(user.id)
+        // Run migration - it handles its own completion tracking using database
+        const migrationResult = await migrateLocalStorageToSupabase(currentUserId)
+        
+        // Check if the effect was cancelled (user changed or component unmounted)
+        if (isCancelled) return
+        
         if (migrationResult.success) {
           setNotif(migrationResult.message)
           setTimeout(() => setNotif(''), 3000)
@@ -48,11 +60,14 @@ function AppWithAuth() {
 
         // Load all data
         const [shop, products, customers, bills] = await Promise.all([
-          dbService.getShop(user.id),
-          dbService.getProducts(user.id),
-          dbService.getCustomers(user.id),
-          dbService.getBills(user.id)
+          dbService.getShop(currentUserId),
+          dbService.getProducts(currentUserId),
+          dbService.getCustomers(currentUserId),
+          dbService.getBills(currentUserId)
         ])
+
+        // Check again if the effect was cancelled
+        if (isCancelled) return
 
         // Transform products data to match UI expectations
         const transformedProducts = products.map(product => ({
@@ -68,17 +83,28 @@ function AppWithAuth() {
           cart: []
         })
       } catch (error) {
+        if (isCancelled) return
+        
         console.error('Error loading data:', error)
         setError(error.message)
         setNotif('Error loading data: ' + error.message)
         setTimeout(() => setNotif(''), 5000)
       } finally {
-        setLoading(false)
+        if (!isCancelled) {
+          setLoading(false)
+          isLoadingRef.current = false
+        }
       }
     }
 
     loadData()
-  }, [user])
+
+    // Cleanup function to cancel the effect if user changes or component unmounts
+    return () => {
+      isCancelled = true
+      isLoadingRef.current = false
+    }
+  }, [user?.id]) // Only depend on user.id, not the entire user object
 
   // Export/Import functionality
   useEffect(() => {
