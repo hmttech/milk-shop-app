@@ -1,9 +1,17 @@
-import { supabase } from './supabase.js'
+import { supabase, isSupabaseConfigured } from './supabase.js'
 import { uid, todayISO } from './helpers.js'
 
 class DatabaseService {
+  // Helper method to check if Supabase is available
+  _checkSupabase() {
+    if (!isSupabaseConfigured() || !supabase) {
+      throw new Error('Supabase is not properly configured. Please check your environment variables.')
+    }
+  }
+
   // Shop operations
   async getShop(userId) {
+    this._checkSupabase()
     const { data, error } = await supabase
       .from('shops')
       .select('*')
@@ -18,6 +26,7 @@ class DatabaseService {
   }
 
   async updateShop(userId, shopData) {
+    this._checkSupabase()
     // First check if shop exists
     const existingShop = await this.getShop(userId)
     
@@ -71,6 +80,7 @@ class DatabaseService {
 
   // Product operations
   async getProducts(userId) {
+    this._checkSupabase()
     const { data, error } = await supabase
       .from('products')
       .select('*')
@@ -82,6 +92,7 @@ class DatabaseService {
   }
 
   async createProduct(userId, product) {
+    this._checkSupabase()
     const productData = {
       id: uid(),
       user_id: userId,
@@ -113,6 +124,7 @@ class DatabaseService {
   }
 
   async updateProduct(userId, productId, product) {
+    this._checkSupabase()
     const { data, error } = await supabase
       .from('products')
       .update({ 
@@ -128,6 +140,7 @@ class DatabaseService {
   }
 
   async deleteProduct(userId, productId) {
+    this._checkSupabase()
     const { error } = await supabase
       .from('products')
       .delete()
@@ -139,6 +152,7 @@ class DatabaseService {
 
   // Customer operations
   async getCustomers(userId) {
+    this._checkSupabase()
     const { data, error } = await supabase
       .from('customers')
       .select('*')
@@ -150,6 +164,7 @@ class DatabaseService {
   }
 
   async createCustomer(userId, customer) {
+    this._checkSupabase()
     const customerData = {
       id: uid(),
       user_id: userId,
@@ -168,6 +183,7 @@ class DatabaseService {
   }
 
   async updateCustomer(userId, customerId, customer) {
+    this._checkSupabase()
     const { data, error } = await supabase
       .from('customers')
       .update({ 
@@ -183,6 +199,7 @@ class DatabaseService {
   }
 
   async deleteCustomer(userId, customerId) {
+    this._checkSupabase()
     const { error } = await supabase
       .from('customers')
       .delete()
@@ -194,6 +211,7 @@ class DatabaseService {
 
   // Bill operations
   async getBills(userId) {
+    this._checkSupabase()
     const { data, error } = await supabase
       .from('bills')
       .select(`
@@ -211,6 +229,7 @@ class DatabaseService {
   }
 
   async createBill(userId, bill, items) {
+    this._checkSupabase()
     // Start a transaction
     const billData = {
       id: uid(),
@@ -250,6 +269,7 @@ class DatabaseService {
   }
 
   async updateBill(userId, billId, bill) {
+    this._checkSupabase()
     const { data, error } = await supabase
       .from('bills')
       .update({ 
@@ -265,6 +285,7 @@ class DatabaseService {
   }
 
   async deleteBill(userId, billId) {
+    this._checkSupabase()
     // Delete bill items first (due to foreign key constraint)
     const { error: itemsError } = await supabase
       .from('bill_items')
@@ -286,6 +307,7 @@ class DatabaseService {
 
   // Helper method to check if user exists in customers by phone
   async findCustomerByPhone(userId, phone) {
+    this._checkSupabase()
     if (!phone) return null
     
     const { data, error } = await supabase
@@ -304,6 +326,7 @@ class DatabaseService {
 
   // Initialize default products for new users
   async initializeDefaultProducts(userId) {
+    this._checkSupabase()
     // First check if products already exist to avoid duplicates
     const existingProducts = await this.getProducts(userId)
     if (existingProducts.length > 0) {
