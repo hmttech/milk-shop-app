@@ -185,12 +185,12 @@ function AppWithAuth() {
   }
 
   const tabs = [
-    ['Billing', Billing],
-    ['Products', Products],
-    ['Customers', Customers],
-    ['Bills', Bills],
-    ['Dashboard', Dashboard],
-    ['WhatsApp Marketing', WhatsAppMarketing],
+    'Billing',
+    'Products',
+    'Customers',
+    'Bills',
+    'Dashboard',
+    'WhatsApp Marketing',
   ]
 
   // Props to pass to child components
@@ -204,6 +204,26 @@ function AppWithAuth() {
     setNotif,
     setTab,
     user, // Add user to props for database operations
+  }
+
+  // Render the current tab component
+  const renderCurrentTab = () => {
+    switch (tab) {
+      case 'Billing':
+        return <Billing {...appProps} />
+      case 'Products':
+        return <Products {...appProps} />
+      case 'Customers':
+        return <Customers {...appProps} />
+      case 'Bills':
+        return <Bills {...appProps} />
+      case 'Dashboard':
+        return <Dashboard {...appProps} />
+      case 'WhatsApp Marketing':
+        return <WhatsAppMarketing {...appProps} />
+      default:
+        return <Billing {...appProps} />
+    }
   }
 
   return (
@@ -231,7 +251,7 @@ function AppWithAuth() {
       </header>
 
       <nav>
-        {tabs.map(([label]) => (
+        {tabs.map((label) => (
           <button
             key={label}
             className={`tab${tab === label ? ' active' : ''}`}
@@ -244,7 +264,7 @@ function AppWithAuth() {
 
       <main>
         {notif && <div className="notif">{notif}</div>}
-        {tabs.find(([label]) => label === tab)?.[1](appProps)}
+        {renderCurrentTab()}
       </main>
     </>
   )
