@@ -24,7 +24,7 @@ function AppWithAuth() {
   const [filter, setFilter] = useState({ billsRange: 'all', status: 'all', search: '' })
   const [notif, setNotif] = useState('')
   const [loading, setLoading] = useState(true)
-  const [migrationCompleted, setMigrationCompleted] = useState(false)
+  const [error, setError] = useState(null)
 
   // Load initial data from Supabase
   useEffect(() => {
@@ -33,15 +33,17 @@ function AppWithAuth() {
     const loadData = async () => {
       try {
         setLoading(true)
+        setError(null)
         
-        // Check if this is a new user and migrate localStorage if needed
-        if (!migrationCompleted) {
-          const migrationResult = await migrateLocalStorageToSupabase(user.id)
-          setMigrationCompleted(true)
-          if (migrationResult.success) {
-            setNotif(migrationResult.message)
-            setTimeout(() => setNotif(''), 3000)
-          }
+        // Run migration - it handles its own completion tracking
+        const migrationResult = await migrateLocalStorageToSupabase(user.id)
+        if (migrationResult.success) {
+          setNotif(migrationResult.message)
+          setTimeout(() => setNotif(''), 3000)
+        } else {
+          console.error('Migration failed:', migrationResult.error)
+          setNotif('Migration failed: ' + migrationResult.error)
+          setTimeout(() => setNotif(''), 5000)
         }
 
         // Load all data
@@ -67,6 +69,7 @@ function AppWithAuth() {
         })
       } catch (error) {
         console.error('Error loading data:', error)
+        setError(error.message)
         setNotif('Error loading data: ' + error.message)
         setTimeout(() => setNotif(''), 5000)
       } finally {
@@ -75,7 +78,7 @@ function AppWithAuth() {
     }
 
     loadData()
-  }, [user, migrationCompleted])
+  }, [user])
 
   // Export/Import functionality
   useEffect(() => {
@@ -128,13 +131,66 @@ function AppWithAuth() {
     )
   }
 
+  if (error) {
+    return (
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'center', 
+        alignItems: 'center', 
+        height: '100vh',
+        flexDirection: 'column',
+        padding: '2rem',
+        textAlign: 'center'
+      }}>
+        <div style={{ marginBottom: '1rem', fontSize: '1.2rem', color: '#d32f2f' }}>
+          ⚠️ Error Loading Application
+        </div>
+        <div style={{ marginBottom: '1rem', color: '#666', maxWidth: '500px' }}>
+          {error}
+        </div>
+        <div style={{ marginBottom: '2rem' }}>
+          <button 
+            onClick={() => window.location.reload()} 
+            style={{ 
+              padding: '0.5rem 1rem', 
+              backgroundColor: '#1976d2', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '4px',
+              cursor: 'pointer',
+              marginRight: '1rem'
+            }}
+          >
+            Retry
+          </button>
+          <button 
+            onClick={handleSignOut}
+            style={{ 
+              padding: '0.5rem 1rem', 
+              backgroundColor: '#757575', 
+              color: 'white', 
+              border: 'none', 
+              borderRadius: '4px',
+              cursor: 'pointer'
+            }}
+          >
+            Sign Out
+          </button>
+        </div>
+        <div style={{ fontSize: '0.8rem', color: '#999' }}>
+          If this problem persists, please contact support.
+        </div>
+      </div>
+    )
+  }
+
   const tabs = [
-    ['Billing', Billing],
-    ['Products', Products],
-    ['Customers', Customers],
-    ['Bills', Bills],
-    ['Dashboard', Dashboard],
-    ['WhatsApp Marketing', WhatsAppMarketing],
+    'Billing',
+    'Products',
+    'Customers',
+    'Bills',
+    'Dashboard',
+    'WhatsApp Marketing',
   ]
 
   // Props to pass to child components
@@ -148,6 +204,26 @@ function AppWithAuth() {
     setNotif,
     setTab,
     user, // Add user to props for database operations
+  }
+
+  // Render the current tab component
+  const renderCurrentTab = () => {
+    switch (tab) {
+      case 'Billing':
+        return <Billing {...appProps} />
+      case 'Products':
+        return <Products {...appProps} />
+      case 'Customers':
+        return <Customers {...appProps} />
+      case 'Bills':
+        return <Bills {...appProps} />
+      case 'Dashboard':
+        return <Dashboard {...appProps} />
+      case 'WhatsApp Marketing':
+        return <WhatsAppMarketing {...appProps} />
+      default:
+        return <Billing {...appProps} />
+    }
   }
 
   return (
@@ -175,7 +251,7 @@ function AppWithAuth() {
       </header>
 
       <nav>
-        {tabs.map(([label]) => (
+        {tabs.map((label) => (
           <button
             key={label}
             className={`tab${tab === label ? ' active' : ''}`}
@@ -188,7 +264,7 @@ function AppWithAuth() {
 
       <main>
         {notif && <div className="notif">{notif}</div>}
-        {tabs.find(([label]) => label === tab)?.[1](appProps)}
+        {renderCurrentTab()}
       </main>
     </>
   )

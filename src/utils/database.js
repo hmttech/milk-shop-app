@@ -1,9 +1,17 @@
-import { supabase } from './supabase.js'
+import { supabase, isSupabaseConfigured } from './supabase.js'
 import { uid, todayISO } from './helpers.js'
 
 class DatabaseService {
+  // Helper method to check if Supabase is available
+  _checkSupabase() {
+    if (!isSupabaseConfigured() || !supabase) {
+      throw new Error('Supabase is not properly configured. Please check your environment variables.')
+    }
+  }
+
   // Shop operations
   async getShop(userId) {
+    this._checkSupabase()
     const { data, error } = await supabase
       .from('shops')
       .select('*')
@@ -18,21 +26,61 @@ class DatabaseService {
   }
 
   async updateShop(userId, shopData) {
-    const { data, error } = await supabase
-      .from('shops')
-      .upsert({ 
-        user_id: userId, 
-        ...shopData,
-        updated_at: todayISO()
-      })
-      .select()
+    this._checkSupabase()
+    // First check if shop exists
+    const existingShop = await this.getShop(userId)
+    
+    // If the existing shop is just the default data (no database record), create a new one
+    const isDefaultShop = !existingShop.id && 
+                         existingShop.name === 'Govinda Dughdalay' && 
+                         existingShop.phone === '+91 90000 00000'
+    
+    if (isDefaultShop) {
+      // Insert new shop record
+      const { data, error } = await supabase
+        .from('shops')
+        .insert({ 
+          user_id: userId, 
+          ...shopData,
+          created_at: todayISO(),
+          updated_at: todayISO()
+        })
+        .select()
 
-    if (error) throw error
-    return data[0]
+      if (error) {
+        // If it's a unique constraint violation, try to fetch the existing record
+        if (error.code === '23505') {
+          const { data: existingData, error: fetchError } = await supabase
+            .from('shops')
+            .select('*')
+            .eq('user_id', userId)
+            .single()
+          
+          if (fetchError) throw fetchError
+          return existingData
+        }
+        throw error
+      }
+      return data[0]
+    } else {
+      // Update existing shop record
+      const { data, error } = await supabase
+        .from('shops')
+        .update({ 
+          ...shopData,
+          updated_at: todayISO()
+        })
+        .eq('user_id', userId)
+        .select()
+
+      if (error) throw error
+      return data[0]
+    }
   }
 
   // Product operations
   async getProducts(userId) {
+    this._checkSupabase()
     const { data, error } = await supabase
       .from('products')
       .select('*')
@@ -44,6 +92,7 @@ class DatabaseService {
   }
 
   async createProduct(userId, product) {
+    this._checkSupabase()
     const productData = {
       id: uid(),
       user_id: userId,
@@ -57,11 +106,25 @@ class DatabaseService {
       .insert(productData)
       .select()
 
-    if (error) throw error
+    if (error) {
+      // If it's a duplicate key error, try with a new ID
+      if (error.code === '23505') {
+        productData.id = uid()
+        const { data: retryData, error: retryError } = await supabase
+          .from('products')
+          .insert(productData)
+          .select()
+        
+        if (retryError) throw retryError
+        return retryData[0]
+      }
+      throw error
+    }
     return data[0]
   }
 
   async updateProduct(userId, productId, product) {
+    this._checkSupabase()
     const { data, error } = await supabase
       .from('products')
       .update({ 
@@ -77,6 +140,7 @@ class DatabaseService {
   }
 
   async deleteProduct(userId, productId) {
+    this._checkSupabase()
     const { error } = await supabase
       .from('products')
       .delete()
@@ -88,6 +152,7 @@ class DatabaseService {
 
   // Customer operations
   async getCustomers(userId) {
+    this._checkSupabase()
     const { data, error } = await supabase
       .from('customers')
       .select('*')
@@ -99,6 +164,7 @@ class DatabaseService {
   }
 
   async createCustomer(userId, customer) {
+    this._checkSupabase()
     const customerData = {
       id: uid(),
       user_id: userId,
@@ -117,6 +183,7 @@ class DatabaseService {
   }
 
   async updateCustomer(userId, customerId, customer) {
+    this._checkSupabase()
     const { data, error } = await supabase
       .from('customers')
       .update({ 
@@ -132,6 +199,7 @@ class DatabaseService {
   }
 
   async deleteCustomer(userId, customerId) {
+    this._checkSupabase()
     const { error } = await supabase
       .from('customers')
       .delete()
@@ -143,6 +211,7 @@ class DatabaseService {
 
   // Bill operations
   async getBills(userId) {
+    this._checkSupabase()
     const { data, error } = await supabase
       .from('bills')
       .select(`
@@ -160,6 +229,7 @@ class DatabaseService {
   }
 
   async createBill(userId, bill, items) {
+    this._checkSupabase()
     // Start a transaction
     const billData = {
       id: uid(),
@@ -199,6 +269,7 @@ class DatabaseService {
   }
 
   async updateBill(userId, billId, bill) {
+    this._checkSupabase()
     const { data, error } = await supabase
       .from('bills')
       .update({ 
@@ -214,6 +285,7 @@ class DatabaseService {
   }
 
   async deleteBill(userId, billId) {
+    this._checkSupabase()
     // Delete bill items first (due to foreign key constraint)
     const { error: itemsError } = await supabase
       .from('bill_items')
@@ -235,6 +307,7 @@ class DatabaseService {
 
   // Helper method to check if user exists in customers by phone
   async findCustomerByPhone(userId, phone) {
+    this._checkSupabase()
     if (!phone) return null
     
     const { data, error } = await supabase
@@ -253,6 +326,13 @@ class DatabaseService {
 
   // Initialize default products for new users
   async initializeDefaultProducts(userId) {
+    this._checkSupabase()
+    // First check if products already exist to avoid duplicates
+    const existingProducts = await this.getProducts(userId)
+    if (existingProducts.length > 0) {
+      return existingProducts
+    }
+
     const defaultProducts = [
       {
         name: 'Milk (500ml)',
@@ -309,7 +389,16 @@ class DatabaseService {
       .insert(productsData)
       .select()
 
-    if (error) throw error
+    if (error) {
+      // If there's a constraint violation, check if products were created by another process
+      if (error.code === '23505') {
+        const existingProducts = await this.getProducts(userId)
+        if (existingProducts.length > 0) {
+          return existingProducts
+        }
+      }
+      throw error
+    }
     return data
   }
 }

@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react'
-import { supabase } from '../utils/supabase.js'
+import { supabase, isSupabaseConfigured, getSupabaseConfigError } from '../utils/supabase.js'
 
 const AuthContext = createContext({})
 
@@ -14,15 +14,28 @@ export const useAuth = () => {
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [configError, setConfigError] = useState(null)
 
   useEffect(() => {
+    // Check if Supabase is properly configured
+    if (!isSupabaseConfigured()) {
+      setConfigError(getSupabaseConfigError())
+      setLoading(false)
+      return
+    }
+
     // Get initial session
     const getSession = async () => {
-      const { data: { session }, error } = await supabase.auth.getSession()
-      if (error) {
-        console.error('Error getting session:', error)
-      } else {
-        setUser(session?.user ?? null)
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession()
+        if (error) {
+          console.error('Error getting session:', error)
+        } else {
+          setUser(session?.user ?? null)
+        }
+      } catch (error) {
+        console.error('Error initializing Supabase:', error)
+        setConfigError('Failed to initialize Supabase. Please check your configuration.')
       }
       setLoading(false)
     }
@@ -41,6 +54,9 @@ export const AuthProvider = ({ children }) => {
   }, [])
 
   const signUp = async (email, password) => {
+    if (!isSupabaseConfigured()) {
+      return { data: null, error: { message: getSupabaseConfigError() } }
+    }
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -49,6 +65,9 @@ export const AuthProvider = ({ children }) => {
   }
 
   const signIn = async (email, password) => {
+    if (!isSupabaseConfigured()) {
+      return { data: null, error: { message: getSupabaseConfigError() } }
+    }
     const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
@@ -57,6 +76,9 @@ export const AuthProvider = ({ children }) => {
   }
 
   const signOut = async () => {
+    if (!isSupabaseConfigured()) {
+      return { error: { message: getSupabaseConfigError() } }
+    }
     const { error } = await supabase.auth.signOut()
     return { error }
   }
@@ -64,6 +86,7 @@ export const AuthProvider = ({ children }) => {
   const value = {
     user,
     loading,
+    configError,
     signUp,
     signIn,
     signOut,
