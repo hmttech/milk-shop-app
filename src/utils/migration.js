@@ -8,12 +8,8 @@ export async function migrateLocalStorageToSupabase(userId) {
     const migrationCompleted = localStorage.getItem(migrationKey)
     
     if (migrationCompleted) {
-      // Migration already completed, just check if we need to initialize default products
-      const existingProducts = await dbService.getProducts(userId)
-      if (existingProducts.length === 0) {
-        await dbService.initializeDefaultProducts(userId)
-        return { success: true, message: 'Initialized with default products' }
-      }
+      // Migration already completed, don't re-initialize products
+      // If user has 0 products, it's because they deleted them - respect their choice
       return { success: true, message: 'Data already migrated' }
     }
 
