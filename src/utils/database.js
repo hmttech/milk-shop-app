@@ -18,17 +18,55 @@ class DatabaseService {
   }
 
   async updateShop(userId, shopData) {
-    const { data, error } = await supabase
-      .from('shops')
-      .upsert({ 
-        user_id: userId, 
-        ...shopData,
-        updated_at: todayISO()
-      })
-      .select()
+    // First check if shop exists
+    const existingShop = await this.getShop(userId)
+    
+    // If the existing shop is just the default data (no database record), create a new one
+    const isDefaultShop = !existingShop.id && 
+                         existingShop.name === 'Govinda Dughdalay' && 
+                         existingShop.phone === '+91 90000 00000'
+    
+    if (isDefaultShop) {
+      // Insert new shop record
+      const { data, error } = await supabase
+        .from('shops')
+        .insert({ 
+          user_id: userId, 
+          ...shopData,
+          created_at: todayISO(),
+          updated_at: todayISO()
+        })
+        .select()
 
-    if (error) throw error
-    return data[0]
+      if (error) {
+        // If it's a unique constraint violation, try to fetch the existing record
+        if (error.code === '23505') {
+          const { data: existingData, error: fetchError } = await supabase
+            .from('shops')
+            .select('*')
+            .eq('user_id', userId)
+            .single()
+          
+          if (fetchError) throw fetchError
+          return existingData
+        }
+        throw error
+      }
+      return data[0]
+    } else {
+      // Update existing shop record
+      const { data, error } = await supabase
+        .from('shops')
+        .update({ 
+          ...shopData,
+          updated_at: todayISO()
+        })
+        .eq('user_id', userId)
+        .select()
+
+      if (error) throw error
+      return data[0]
+    }
   }
 
   // Product operations
@@ -57,7 +95,20 @@ class DatabaseService {
       .insert(productData)
       .select()
 
-    if (error) throw error
+    if (error) {
+      // If it's a duplicate key error, try with a new ID
+      if (error.code === '23505') {
+        productData.id = uid()
+        const { data: retryData, error: retryError } = await supabase
+          .from('products')
+          .insert(productData)
+          .select()
+        
+        if (retryError) throw retryError
+        return retryData[0]
+      }
+      throw error
+    }
     return data[0]
   }
 
@@ -253,6 +304,12 @@ class DatabaseService {
 
   // Initialize default products for new users
   async initializeDefaultProducts(userId) {
+    // First check if products already exist to avoid duplicates
+    const existingProducts = await this.getProducts(userId)
+    if (existingProducts.length > 0) {
+      return existingProducts
+    }
+
     const defaultProducts = [
       {
         name: 'Milk (500ml)',
@@ -309,7 +366,16 @@ class DatabaseService {
       .insert(productsData)
       .select()
 
-    if (error) throw error
+    if (error) {
+      // If there's a constraint violation, check if products were created by another process
+      if (error.code === '23505') {
+        const existingProducts = await this.getProducts(userId)
+        if (existingProducts.length > 0) {
+          return existingProducts
+        }
+      }
+      throw error
+    }
     return data
   }
 }

@@ -3,6 +3,20 @@ import { loadState as loadLocalState } from './storage.js'
 
 export async function migrateLocalStorageToSupabase(userId) {
   try {
+    // Check if migration was already completed for this user
+    const migrationKey = `migration_completed_${userId}`
+    const migrationCompleted = localStorage.getItem(migrationKey)
+    
+    if (migrationCompleted) {
+      // Migration already completed, just check if we need to initialize default products
+      const existingProducts = await dbService.getProducts(userId)
+      if (existingProducts.length === 0) {
+        await dbService.initializeDefaultProducts(userId)
+        return { success: true, message: 'Initialized with default products' }
+      }
+      return { success: true, message: 'Data already migrated' }
+    }
+
     // Get local storage data
     const localData = loadLocalState()
     
@@ -10,6 +24,7 @@ export async function migrateLocalStorageToSupabase(userId) {
     if (!localData.products?.length && !localData.customers?.length && !localData.bills?.length) {
       // No local data to migrate, initialize with default products
       await dbService.initializeDefaultProducts(userId)
+      localStorage.setItem(migrationKey, 'true')
       return { success: true, message: 'Initialized with default products' }
     }
 
@@ -63,9 +78,12 @@ export async function migrateLocalStorageToSupabase(userId) {
       }
     }
 
+    // Mark migration as completed
+    localStorage.setItem(migrationKey, 'true')
     return { success: true, message: 'Migration completed successfully' }
   } catch (error) {
     console.error('Migration error:', error)
+    // Don't mark migration as completed if it failed
     return { success: false, error: error.message }
   }
 }
