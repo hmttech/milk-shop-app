@@ -102,13 +102,18 @@ class DatabaseService {
         .single()
 
       if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-        // If table doesn't exist, return default values
+        // If table doesn't exist, check if products exist to determine initialization status
         if (error.message && error.message.includes('table') && error.message.includes('schema cache')) {
-          console.warn('user_initialization table not found, using default values')
+          console.warn('user_initialization table not found, checking products to determine initialization status')
+          
+          // Check if user already has products
+          const existingProducts = await this.getProducts(userId)
+          const hasProducts = existingProducts.length > 0
+          
           return { 
             user_id: userId, 
-            products_initialized: false, 
-            migration_completed: false 
+            products_initialized: hasProducts, // If products exist, consider them initialized
+            migration_completed: hasProducts  // If products exist, consider migration complete
           }
         }
         throw error
@@ -120,12 +125,26 @@ class DatabaseService {
         migration_completed: false 
       }
     } catch (error) {
-      // If any error accessing the table, return default values and log warning
-      console.warn('Error accessing user_initialization table:', error.message)
-      return { 
-        user_id: userId, 
-        products_initialized: false, 
-        migration_completed: false 
+      // If any error accessing the table, check existing products to determine status
+      console.warn('Error accessing user_initialization table:', error.message, '- checking existing products')
+      
+      try {
+        const existingProducts = await this.getProducts(userId)
+        const hasProducts = existingProducts.length > 0
+        
+        return { 
+          user_id: userId, 
+          products_initialized: hasProducts, // If products exist, consider them initialized
+          migration_completed: hasProducts  // If products exist, consider migration complete
+        }
+      } catch (productsError) {
+        console.error('Error checking existing products:', productsError.message)
+        // Fallback to false to prevent infinite loops, but this should be rare
+        return { 
+          user_id: userId, 
+          products_initialized: false, 
+          migration_completed: false 
+        }
       }
     }
   }
@@ -161,6 +180,7 @@ class DatabaseService {
     this._checkSupabase()
     
     // Filter out camelCase fields that don't belong in database
+    // eslint-disable-next-line no-unused-vars
     const { lowAt, ...dbProduct } = product
     
     const productData = {
@@ -207,6 +227,7 @@ class DatabaseService {
     this._checkSupabase()
     
     // Filter out camelCase fields that don't belong in database
+    // eslint-disable-next-line no-unused-vars
     const { lowAt, ...dbProduct } = product
     
     const { data, error } = await supabase
