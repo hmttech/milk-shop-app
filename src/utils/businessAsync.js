@@ -290,8 +290,8 @@ export async function checkout({
     }
 
     // Generate and download PDF
-    const blob = genPDF(bill, state.shop);
-    const filename = `${bill.invoiceNo}.pdf`;
+    const blob = genPDF(transformedBill, state.shop);
+    const filename = `${transformedBill.invoiceNo}.pdf`;
     downloadFile(filename, blob, 'application/pdf');
 
     setNotif('Invoice created and PDF downloaded!')

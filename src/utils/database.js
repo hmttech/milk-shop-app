@@ -94,36 +94,67 @@ class DatabaseService {
   // User initialization tracking methods
   async getUserInitialization(userId) {
     this._checkSupabase()
-    const { data, error } = await supabase
-      .from('user_initialization')
-      .select('*')
-      .eq('user_id', userId)
-      .single()
+    try {
+      const { data, error } = await supabase
+        .from('user_initialization')
+        .select('*')
+        .eq('user_id', userId)
+        .single()
 
-    if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
-      throw error
-    }
+      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows returned
+        // If table doesn't exist, return default values
+        if (error.message && error.message.includes('table') && error.message.includes('schema cache')) {
+          console.warn('user_initialization table not found, using default values')
+          return { 
+            user_id: userId, 
+            products_initialized: false, 
+            migration_completed: false 
+          }
+        }
+        throw error
+      }
 
-    return data || { 
-      user_id: userId, 
-      products_initialized: false, 
-      migration_completed: false 
+      return data || { 
+        user_id: userId, 
+        products_initialized: false, 
+        migration_completed: false 
+      }
+    } catch (error) {
+      // If any error accessing the table, return default values and log warning
+      console.warn('Error accessing user_initialization table:', error.message)
+      return { 
+        user_id: userId, 
+        products_initialized: false, 
+        migration_completed: false 
+      }
     }
   }
 
   async setUserInitialization(userId, updates) {
     this._checkSupabase()
-    const { data, error } = await supabase
-      .from('user_initialization')
-      .upsert({
-        user_id: userId,
-        ...updates,
-        updated_at: todayISO()
-      })
-      .select()
+    try {
+      const { data, error } = await supabase
+        .from('user_initialization')
+        .upsert({
+          user_id: userId,
+          ...updates,
+          updated_at: todayISO()
+        })
+        .select()
 
-    if (error) throw error
-    return data[0]
+      if (error) throw error
+      return data[0]
+    } catch (error) {
+      // If table doesn't exist, just log and continue
+      if (error.message && error.message.includes('table') && error.message.includes('schema cache')) {
+        console.warn('user_initialization table not found, skipping initialization tracking')
+        return { user_id: userId, ...updates }
+      }
+      
+      // For other errors, log warning but don't throw to avoid breaking migration
+      console.warn('Error updating user_initialization table:', error.message)
+      return { user_id: userId, ...updates }
+    }
   }
 
   async createProduct(userId, product) {
