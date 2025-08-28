@@ -128,10 +128,14 @@ class DatabaseService {
 
   async createProduct(userId, product) {
     this._checkSupabase()
+    
+    // Filter out camelCase fields that don't belong in database
+    const { lowAt, ...dbProduct } = product
+    
     const productData = {
       id: uid(),
       user_id: userId,
-      ...product,
+      ...dbProduct,
       created_at: todayISO(),
       updated_at: todayISO()
     }
@@ -170,10 +174,14 @@ class DatabaseService {
 
   async updateProduct(userId, productId, product) {
     this._checkSupabase()
+    
+    // Filter out camelCase fields that don't belong in database
+    const { lowAt, ...dbProduct } = product
+    
     const { data, error } = await supabase
       .from('products')
       .update({ 
-        ...product, 
+        ...dbProduct, 
         updated_at: todayISO() 
       })
       .eq('id', productId)
