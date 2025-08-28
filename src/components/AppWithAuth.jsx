@@ -75,11 +75,32 @@ function AppWithAuth() {
           lowAt: product.low_at // Map database field to UI field
         }))
 
+        // Transform bills data to match UI expectations
+        const transformedBills = bills.map(bill => ({
+          ...bill,
+          invoiceNo: bill.invoice_no,
+          createdAt: bill.created_at,
+          updatedAt: bill.updated_at,
+          dueDate: bill.due_date,
+          customerName: bill.customer_name,
+          customerPhone: bill.customer_phone,
+          customerReligion: bill.customer_religion,
+          customerGeneral: bill.customer_general,
+          customerId: bill.customer_id,
+          customer: bill.customer_name ? {
+            id: bill.customer_id,
+            name: bill.customer_name,
+            phone: bill.customer_phone,
+            religion: bill.customer_religion,
+            general: bill.customer_general
+          } : null
+        }))
+
         setState({
           shop,
           products: transformedProducts,
           customers,
-          bills,
+          bills: transformedBills,
           cart: []
         })
       } catch (error) {
