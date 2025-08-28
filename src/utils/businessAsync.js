@@ -1,6 +1,7 @@
 import { uid, todayISO, parseNum } from './helpers.js'
 import { genInvoiceNumber } from './generators.js'
 import { genPDF } from './pdf.js'
+import { downloadFile } from './storage.js'
 import { dbService } from './database.js'
 
 // Product management functions (async versions)
@@ -289,7 +290,9 @@ export async function checkout({
     }
 
     // Generate and download PDF
-    genPDF(state.shop, bill, bill.items)
+    const blob = genPDF(bill, state.shop);
+    const filename = `${bill.invoiceNo}.pdf`;
+    downloadFile(filename, blob, 'application/pdf');
 
     setNotif('Invoice created and PDF downloaded!')
     setTimeout(() => setNotif(''), 3000)
