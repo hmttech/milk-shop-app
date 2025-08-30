@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { currency, parseNum, getAvailableUnits, calculateUnitPrice, getUnitDisplayName } from '../../utils/helpers.js';
+import { currency, parseNum, calculateUnitPrice, getUnitDisplayName, parseSmartQuantity, formatQuantityDisplay } from '../../utils/helpers.js';
 import { addToCart, updateCartQty, removeFromCart } from '../../utils/business.js';
 import { checkout as checkoutAsync } from '../../utils/businessAsync.js';
 import { checkout as checkoutLocal } from '../../utils/business.js';
@@ -12,36 +12,36 @@ function Billing({ state, setState, setNotif, setTab, user }) {
   const [religion, setReligion] = useState('');
   const [general, setGeneral] = useState(true);
   const [q, setQ] = useState('');
-  const [unitQuantities, setUnitQuantities] = useState({});
-  const [selectedUnits, setSelectedUnits] = useState({});
+  const [smartQuantities, setSmartQuantities] = useState({}); // Store raw text input
+  const [quantityErrors, setQuantityErrors] = useState({}); // Store validation errors
 
   // Custom add to cart function for unit-based products
-  const addToCartWithUnits = (product, quantity, unit) => {
-    if (product.unitType) {
-      const finalPrice = calculateUnitPrice(product.unitPrice, quantity, unit, product.unitType);
+  const addToCartWithUnits = (product, parsedQuantity) => {
+    if (product.unitType && parsedQuantity.isValid) {
+      const finalPrice = calculateUnitPrice(product.unitPrice, parsedQuantity.quantity, parsedQuantity.unit, product.unitType);
       const cartItem = {
         id: product.id,
-        name: `${product.name} (${quantity}${unit})`,
+        name: `${product.name} (${formatQuantityDisplay(parsedQuantity.quantity, parsedQuantity.unit)})`,
         price: finalPrice,
         originalPrice: product.unitPrice,
         unitType: product.unitType,
-        purchaseQuantity: quantity,
-        purchaseUnit: unit,
+        purchaseQuantity: parsedQuantity.quantity,
+        purchaseUnit: parsedQuantity.unit,
         qty: 1 // quantity in cart is always 1 for unit-based items
       };
       
       setState((prev) => {
-        const exists = prev.cart.find((c) => c.id === product.id && c.purchaseUnit === unit);
+        const exists = prev.cart.find((c) => c.id === product.id && c.purchaseUnit === parsedQuantity.unit);
         let cart;
         if (exists) {
           // Update existing item
           cart = prev.cart.map((c) => 
-            (c.id === product.id && c.purchaseUnit === unit) ? 
+            (c.id === product.id && c.purchaseUnit === parsedQuantity.unit) ? 
             { 
               ...c, 
-              name: `${product.name} (${parseNum(c.purchaseQuantity) + quantity}${unit})`,
-              purchaseQuantity: parseNum(c.purchaseQuantity) + quantity,
-              price: calculateUnitPrice(product.unitPrice, parseNum(c.purchaseQuantity) + quantity, unit, product.unitType)
+              name: `${product.name} (${formatQuantityDisplay(parseNum(c.purchaseQuantity) + parsedQuantity.quantity, parsedQuantity.unit)})`,
+              purchaseQuantity: parseNum(c.purchaseQuantity) + parsedQuantity.quantity,
+              price: calculateUnitPrice(product.unitPrice, parseNum(c.purchaseQuantity) + parsedQuantity.quantity, parsedQuantity.unit, product.unitType)
             } : c
           );
         } else {
@@ -123,12 +123,12 @@ function Billing({ state, setState, setNotif, setTab, user }) {
       </div>
       <div className="grid">
         {filteredProducts.map((p) => {
-          const availableUnits = p.unitType ? getAvailableUnits(p.unitType) : [];
-          const selectedUnit = selectedUnits[p.id] || (availableUnits[0]?.value || 'piece');
-          const currentQuantity = unitQuantities[p.id] || 1;
-          const calculatedPrice = p.unitType ? 
-            calculateUnitPrice(p.unitPrice, currentQuantity, selectedUnit, p.unitType) : 
+          const smartInput = smartQuantities[p.id] || '';
+          const parsedQuantity = p.unitType ? parseSmartQuantity(smartInput || '1kg', p.unitType) : null;
+          const calculatedPrice = p.unitType && parsedQuantity?.isValid ? 
+            calculateUnitPrice(p.unitPrice, parsedQuantity.quantity, parsedQuantity.unit, p.unitType) : 
             p.price;
+          const hasError = quantityErrors[p.id];
 
           return (
             <div key={p.id} className="card">
@@ -158,33 +158,36 @@ function Billing({ state, setState, setNotif, setTab, user }) {
                 <div style={{ marginTop: 8 }}>
                   <div className="row" style={{ marginBottom: 4 }}>
                     <input
-                      type="number"
-                      min="0.001"
-                      step="0.001"
-                      value={currentQuantity}
-                      onChange={(e) => setUnitQuantities(prev => ({
-                        ...prev,
-                        [p.id]: parseNum(e.target.value) || 1
-                      }))}
-                      style={{ width: 80, marginRight: 8 }}
+                      type="text"
+                      placeholder={p.unitType === 'Kg' ? 'e.g., 250gm or 0.25kg' : 'e.g., 500ml or 0.5L'}
+                      value={smartInput}
+                      onChange={(e) => {
+                        const newValue = e.target.value;
+                        setSmartQuantities(prev => ({
+                          ...prev,
+                          [p.id]: newValue
+                        }));
+                        
+                        // Validate input
+                        const parsed = parseSmartQuantity(newValue, p.unitType);
+                        setQuantityErrors(prev => ({
+                          ...prev,
+                          [p.id]: newValue && !parsed.isValid
+                        }));
+                      }}
+                      style={{ 
+                        flex: 1, 
+                        marginRight: 8,
+                        borderColor: hasError ? '#f44336' : '#ddd'
+                      }}
                     />
-                    <select
-                      value={selectedUnit}
-                      onChange={(e) => setSelectedUnits(prev => ({
-                        ...prev,
-                        [p.id]: e.target.value
-                      }))}
-                      style={{ marginRight: 8 }}
-                    >
-                      {availableUnits.map(unit => (
-                        <option key={unit.value} value={unit.value}>
-                          {unit.label}
-                        </option>
-                      ))}
-                    </select>
                   </div>
                   <div className="muted" style={{ fontSize: '12px' }}>
-                    Total: {currency(calculatedPrice)}
+                    {hasError ? (
+                      <span style={{ color: '#f44336' }}>Invalid format. Try: 250gm, 0.5kg, 500ml, 1L</span>
+                    ) : (
+                      <>Total: {currency(calculatedPrice)}</>
+                    )}
                   </div>
                 </div>
               )}
@@ -194,11 +197,24 @@ function Billing({ state, setState, setNotif, setTab, user }) {
                   className="primary" 
                   onClick={() => {
                     if (p.unitType) {
-                      addToCartWithUnits(p, currentQuantity, selectedUnit);
+                      const parsed = parseSmartQuantity(smartInput || '1kg', p.unitType);
+                      if (parsed.isValid) {
+                        addToCartWithUnits(p, parsed);
+                        // Clear the input after adding to cart
+                        setSmartQuantities(prev => ({
+                          ...prev,
+                          [p.id]: ''
+                        }));
+                        setQuantityErrors(prev => ({
+                          ...prev,
+                          [p.id]: false
+                        }));
+                      }
                     } else {
                       addToCart(setState, p, 1);
                     }
                   }}
+                  disabled={p.unitType && hasError}
                 >
                   Add to Cart
                 </button>

@@ -99,6 +99,12 @@ export async function migrateLocalStorageToSupabase(userId) {
       migration_completed: true,
       products_initialized: true 
     })
+
+    // Upgrade existing products to smart quantity format
+    const upgradeResult = await dbService.upgradeProductsToSmartQuantity(userId)
+    if (!upgradeResult.success) {
+      console.warn('Product upgrade failed:', upgradeResult.error)
+    }
     
     // Clear localStorage migration tracking (legacy cleanup)
     const migrationKey = `migration_completed_${userId}`

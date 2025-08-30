@@ -49,6 +49,13 @@ function AppWithAuth() {
         // Check if the effect was cancelled (user changed or component unmounted)
         if (isCancelled) return
         
+        // Run smart quantity upgrade for existing users (migration handles its own completion tracking)
+        const upgradeResult = await dbService.upgradeProductsToSmartQuantity(currentUserId)
+        if (upgradeResult.success && upgradeResult.message !== 'Smart quantity upgrade already completed') {
+          setNotif(upgradeResult.message)
+          setTimeout(() => setNotif(''), 3000)
+        }
+        
         if (migrationResult.success) {
           setNotif(migrationResult.message)
           setTimeout(() => setNotif(''), 3000)
@@ -297,22 +304,29 @@ function AppWithAuth() {
         </div>
       </header>
 
-      <nav>
-        {tabs.map((label) => (
-          <button
-            key={label}
-            className={`tab${tab === label ? ' active' : ''}`}
-            onClick={() => setTab(label)}
-          >
-            {label}
-          </button>
-        ))}
-      </nav>
-
-      <main>
-        {notif && <div className="notif">{notif}</div>}
+      <div className="container">
+        {notif && (
+          <div className="card" style={{ borderLeft: '4px solid #1b6' }}>
+            {notif}
+          </div>
+        )}
+        <div className="tabs">
+          {tabs.map((label) => (
+            <div
+              key={label}
+              className={`tab${tab === label ? ' active' : ''}`}
+              onClick={() => setTab(label)}
+            >
+              {label}
+            </div>
+          ))}
+        </div>
         {renderCurrentTab()}
-      </main>
+      </div>
+
+      <div className="footer">
+        © <span>{new Date().getFullYear()}</span> Govinda Dughdalay
+      </div>
     </>
   )
 }
