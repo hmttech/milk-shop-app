@@ -28,8 +28,74 @@ BEGIN
 END $$;
 
 -- =====================================================
--- STEP 2: Update User Initialization Tracking
+-- STEP 2: Create User Initialization Table (if needed) and Update Tracking
 -- =====================================================
+
+-- Create user_initialization table if it doesn't exist
+CREATE TABLE IF NOT EXISTS public.user_initialization (
+    user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+    products_initialized BOOLEAN DEFAULT false,
+    migration_completed BOOLEAN DEFAULT false,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Enable RLS on user_initialization table if not already enabled
+DO $$
+BEGIN
+    ALTER TABLE public.user_initialization ENABLE ROW LEVEL SECURITY;
+    RAISE NOTICE 'Enabled RLS on user_initialization table';
+EXCEPTION WHEN OTHERS THEN
+    RAISE NOTICE 'RLS already enabled on user_initialization table or other issue: %', SQLERRM;
+END $$;
+
+-- Create RLS policies for user_initialization (if they don't exist)
+DO $$
+BEGIN
+    -- Create policy for SELECT
+    BEGIN
+        EXECUTE 'CREATE POLICY "Users can view own initialization status" ON public.user_initialization FOR SELECT USING (auth.uid() = user_id)';
+        RAISE NOTICE 'Created SELECT policy for user_initialization';
+    EXCEPTION WHEN duplicate_object THEN
+        RAISE NOTICE 'SELECT policy already exists for user_initialization';
+    END;
+    
+    -- Create policy for INSERT
+    BEGIN
+        EXECUTE 'CREATE POLICY "Users can insert own initialization status" ON public.user_initialization FOR INSERT WITH CHECK (auth.uid() = user_id)';
+        RAISE NOTICE 'Created INSERT policy for user_initialization';
+    EXCEPTION WHEN duplicate_object THEN
+        RAISE NOTICE 'INSERT policy already exists for user_initialization';
+    END;
+    
+    -- Create policy for UPDATE
+    BEGIN
+        EXECUTE 'CREATE POLICY "Users can update own initialization status" ON public.user_initialization FOR UPDATE USING (auth.uid() = user_id)';
+        RAISE NOTICE 'Created UPDATE policy for user_initialization';
+    EXCEPTION WHEN duplicate_object THEN
+        RAISE NOTICE 'UPDATE policy already exists for user_initialization';
+    END;
+END $$;
+
+-- Create updated_at trigger function if it doesn't exist
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = timezone('utc'::text, now());
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Create trigger for user_initialization updated_at (if it doesn't exist)
+DO $$
+BEGIN
+    BEGIN
+        EXECUTE 'CREATE TRIGGER update_user_initialization_updated_at BEFORE UPDATE ON public.user_initialization FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()';
+        RAISE NOTICE 'Created updated_at trigger for user_initialization';
+    EXCEPTION WHEN duplicate_object THEN
+        RAISE NOTICE 'updated_at trigger already exists for user_initialization';
+    END;
+END $$;
 
 -- Add smart quantity upgrade tracking column
 DO $$
