@@ -5,37 +5,34 @@ const STORAGE_KEY = 'govinda_dughdalay_v1';
 const initialProducts = [
   {
     id: uid(),
-    name: 'Milk (500ml)',
+    name: 'Fresh Milk',
     category: 'Milk',
     description: 'Fresh cow milk',
-    price: 30,
-    qty: 100,
-    lowAt: 10,
-  },
-  {
-    id: uid(),
-    name: 'Milk (1L)',
-    category: 'Milk',
-    description: 'Fresh cow milk',
-    price: 60,
+    price: 60, // legacy price for backward compatibility
+    unitType: 'Litre',
+    unitPrice: 60, // ₹60 per litre
     qty: 80,
     lowAt: 10,
   },
   {
     id: uid(),
-    name: 'Ghee (500g)',
+    name: 'Pure Desi Ghee',
     category: 'Ghee',
     description: 'Pure desi ghee',
-    price: 450,
+    price: 900, // legacy price for backward compatibility
+    unitType: 'Kg',
+    unitPrice: 900, // ₹900 per kg
     qty: 20,
     lowAt: 5,
   },
   {
     id: uid(),
-    name: 'Paneer (200g)',
+    name: 'Fresh Paneer',
     category: 'Paneer',
     description: 'Fresh paneer',
-    price: 90,
+    price: 450, // legacy price for backward compatibility
+    unitType: 'Kg',
+    unitPrice: 450, // ₹450 per kg
     qty: 30,
     lowAt: 6,
   },
@@ -47,6 +44,17 @@ const initialProducts = [
     price: 180,
     qty: 15,
     lowAt: 4,
+    // No unit type - remains as fixed price product
+  },
+  {
+    id: uid(),
+    name: 'Milk Packet (500ml)',
+    category: 'Milk',
+    description: 'Packaged cow milk',
+    price: 30,
+    qty: 100,
+    lowAt: 10,
+    // No unit type - remains as fixed price product
   },
 ];
 
