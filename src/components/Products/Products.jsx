@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { currency, parseNum } from '../../utils/helpers.js';
+import { currency, parseNum, getUnitDisplayName } from '../../utils/helpers.js';
 import { addOrUpdateProduct, removeProduct } from '../../utils/businessAsync.js';
 import { addToCart } from '../../utils/business.js';
 
@@ -12,6 +12,8 @@ function Products({ state, setState, editingProduct, setEditingProduct, setNotif
       category: 'Milk',
       description: '',
       price: 0,
+      unitType: '',
+      unitPrice: 0,
       qty: 0,
       lowAt: 5,
     }
@@ -26,6 +28,8 @@ function Products({ state, setState, editingProduct, setEditingProduct, setNotif
           category: 'Milk',
           description: '',
           price: 0,
+          unitType: '',
+          unitPrice: 0,
           qty: 0,
           lowAt: 5,
         }
@@ -42,6 +46,8 @@ function Products({ state, setState, editingProduct, setEditingProduct, setNotif
       category: form.category.trim(),
       description: form.description.trim(),
       price: parseNum(form.price),
+      unitType: form.unitType || undefined,
+      unitPrice: form.unitType ? parseNum(form.unitPrice) : undefined,
       qty: parseNum(form.qty),
       lowAt: parseNum(form.lowAt) || 5,
     });
@@ -79,6 +85,8 @@ function Products({ state, setState, editingProduct, setEditingProduct, setNotif
               category: 'Milk',
               description: '',
               price: 0,
+              unitType: '',
+              unitPrice: 0,
               qty: 0,
               lowAt: 5,
             })
@@ -113,12 +121,30 @@ function Products({ state, setState, editingProduct, setEditingProduct, setNotif
               </select>
             </div>
             <div>
-              <label>Price</label>
+              <label>Unit Type</label>
+              <select
+                value={form.unitType}
+                onChange={(e) => setForm({ ...form, unitType: e.target.value, unitPrice: e.target.value ? form.unitPrice : 0 })}
+              >
+                <option value="">Fixed Price (per piece)</option>
+                <option value="Kg">Weight Based (per Kg)</option>
+                <option value="Litre">Volume Based (per Litre)</option>
+              </select>
+            </div>
+            <div>
+              <label>{form.unitType ? `Unit Price ${getUnitDisplayName(form.unitType)}` : 'Price'}</label>
               <input
                 type="number"
                 step="0.01"
-                value={form.price}
-                onChange={(e) => setForm({ ...form, price: e.target.value })}
+                value={form.unitType ? form.unitPrice : form.price}
+                onChange={(e) => {
+                  if (form.unitType) {
+                    setForm({ ...form, unitPrice: e.target.value });
+                  } else {
+                    setForm({ ...form, price: e.target.value });
+                  }
+                }}
+                required
               />
             </div>
             <div>
@@ -171,7 +197,12 @@ function Products({ state, setState, editingProduct, setEditingProduct, setNotif
             <div className="muted">{p.category}</div>
             <div>{p.description || <span className="muted">No description</span>}</div>
             <div className="row" style={{ marginTop: 6 }}>
-              <span>{currency(p.price)}</span>
+              <span>
+                {p.unitType ? 
+                  `${currency(p.unitPrice)} ${getUnitDisplayName(p.unitType)}` : 
+                  currency(p.price)
+                }
+              </span>
               <span className="spacer"></span>
               <span>Qty: {p.qty}</span>
             </div>

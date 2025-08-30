@@ -89,8 +89,16 @@ export function updateCartQty(setState, id, qty) {
   setState((prev) => ({ ...prev, cart: prev.cart.map((c) => (c.id === id ? { ...c, qty } : c)) }));
 }
 
-export function removeFromCart(setState, id) {
-  setState((prev) => ({ ...prev, cart: prev.cart.filter((c) => c.id !== id) }));
+export function removeFromCart(setState, id, purchaseUnit = null) {
+  setState((prev) => ({ 
+    ...prev, 
+    cart: prev.cart.filter((c) => {
+      if (purchaseUnit && c.purchaseUnit) {
+        return !(c.id === id && c.purchaseUnit === purchaseUnit);
+      }
+      return c.id !== id;
+    })
+  }));
 }
 
 export function ensureCustomer(setState, state, name, phone, religion, general) {

@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { currency, parseNum } from '../../utils/helpers.js';
+import { currency, parseNum, getAvailableUnits, calculateUnitPrice } from '../../utils/helpers.js';
 import { addToCart, updateCartQty, removeFromCart } from '../../utils/business.js';
 import { checkout as checkoutAsync } from '../../utils/businessAsync.js';
 import { checkout as checkoutLocal } from '../../utils/business.js';
@@ -12,6 +12,48 @@ function Billing({ state, setState, setNotif, setTab, user }) {
   const [religion, setReligion] = useState('');
   const [general, setGeneral] = useState(true);
   const [q, setQ] = useState('');
+  const [unitQuantities, setUnitQuantities] = useState({});
+  const [selectedUnits, setSelectedUnits] = useState({});
+
+  // Custom add to cart function for unit-based products
+  const addToCartWithUnits = (product, quantity, unit) => {
+    if (product.unitType) {
+      const finalPrice = calculateUnitPrice(product.unitPrice, quantity, unit, product.unitType);
+      const cartItem = {
+        id: product.id,
+        name: `${product.name} (${quantity}${unit})`,
+        price: finalPrice,
+        originalPrice: product.unitPrice,
+        unitType: product.unitType,
+        purchaseQuantity: quantity,
+        purchaseUnit: unit,
+        qty: 1 // quantity in cart is always 1 for unit-based items
+      };
+      
+      setState((prev) => {
+        const exists = prev.cart.find((c) => c.id === product.id && c.purchaseUnit === unit);
+        let cart;
+        if (exists) {
+          // Update existing item
+          cart = prev.cart.map((c) => 
+            (c.id === product.id && c.purchaseUnit === unit) ? 
+            { 
+              ...c, 
+              name: `${product.name} (${parseNum(c.purchaseQuantity) + quantity}${unit})`,
+              purchaseQuantity: parseNum(c.purchaseQuantity) + quantity,
+              price: calculateUnitPrice(product.unitPrice, parseNum(c.purchaseQuantity) + quantity, unit, product.unitType)
+            } : c
+          );
+        } else {
+          cart = [cartItem, ...prev.cart];
+        }
+        return { ...prev, cart };
+      });
+    } else {
+      // Use regular add to cart for fixed price products
+      addToCart(setState, product, 1);
+    }
+  };
 
   // Filter products by search
   const filteredProducts = useMemo(() => {
@@ -80,31 +122,90 @@ function Billing({ state, setState, setNotif, setTab, user }) {
         />
       </div>
       <div className="grid">
-        {filteredProducts.map((p) => (
-          <div key={p.id} className="card">
-            <div className="row">
-              <strong>{p.name}</strong>
-              <span className="spacer"></span>
-              {p.qty <= (p.lowAt ?? 5) ? (
-                <span className="pill bad">Low</span>
-              ) : (
-                <span className="pill ok">OK</span>
+        {filteredProducts.map((p) => {
+          const availableUnits = p.unitType ? getAvailableUnits(p.unitType) : [];
+          const selectedUnit = selectedUnits[p.id] || (availableUnits[0]?.value || 'piece');
+          const currentQuantity = unitQuantities[p.id] || 1;
+          const calculatedPrice = p.unitType ? 
+            calculateUnitPrice(p.unitPrice, currentQuantity, selectedUnit, p.unitType) : 
+            p.price;
+
+          return (
+            <div key={p.id} className="card">
+              <div className="row">
+                <strong>{p.name}</strong>
+                <span className="spacer"></span>
+                {p.qty <= (p.lowAt ?? 5) ? (
+                  <span className="pill bad">Low</span>
+                ) : (
+                  <span className="pill ok">OK</span>
+                )}
+              </div>
+              <div className="muted">{p.category}</div>
+              <div>{p.description || <span className="muted">No description</span>}</div>
+              <div className="row" style={{ marginTop: 6 }}>
+                <span>
+                  {p.unitType ? 
+                    `${currency(p.unitPrice)} per ${p.unitType}` : 
+                    currency(p.price)
+                  }
+                </span>
+                <span className="spacer"></span>
+                <span>Qty: {p.qty}</span>
+              </div>
+              
+              {p.unitType && (
+                <div style={{ marginTop: 8 }}>
+                  <div className="row" style={{ marginBottom: 4 }}>
+                    <input
+                      type="number"
+                      min="0.001"
+                      step="0.001"
+                      value={currentQuantity}
+                      onChange={(e) => setUnitQuantities(prev => ({
+                        ...prev,
+                        [p.id]: parseNum(e.target.value) || 1
+                      }))}
+                      style={{ width: 80, marginRight: 8 }}
+                    />
+                    <select
+                      value={selectedUnit}
+                      onChange={(e) => setSelectedUnits(prev => ({
+                        ...prev,
+                        [p.id]: e.target.value
+                      }))}
+                      style={{ marginRight: 8 }}
+                    >
+                      {availableUnits.map(unit => (
+                        <option key={unit.value} value={unit.value}>
+                          {unit.label}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="muted" style={{ fontSize: '12px' }}>
+                    Total: {currency(calculatedPrice)}
+                  </div>
+                </div>
               )}
+
+              <div className="row right" style={{ marginTop: 8 }}>
+                <button 
+                  className="primary" 
+                  onClick={() => {
+                    if (p.unitType) {
+                      addToCartWithUnits(p, currentQuantity, selectedUnit);
+                    } else {
+                      addToCart(setState, p, 1);
+                    }
+                  }}
+                >
+                  Add to Cart
+                </button>
+              </div>
             </div>
-            <div className="muted">{p.category}</div>
-            <div>{p.description || <span className="muted">No description</span>}</div>
-            <div className="row" style={{ marginTop: 6 }}>
-              <span>{currency(p.price)}</span>
-              <span className="spacer"></span>
-              <span>Qty: {p.qty}</span>
-            </div>
-            <div className="row right" style={{ marginTop: 8 }}>
-              <button className="primary" onClick={() => addToCart(setState, p, 1)}>
-                Add to Cart
-              </button>
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       <h3>Cart</h3>
@@ -122,23 +223,35 @@ function Billing({ state, setState, setNotif, setTab, user }) {
             </tr>
           </thead>
           <tbody>
-            {state.cart.map((item) => (
-              <tr key={item.id}>
+            {state.cart.map((item, index) => (
+              <tr key={`${item.id}-${index}`}>
                 <td>{item.name}</td>
                 <td>
-                  <input
-                    type="number"
-                    min={1}
-                    max={state.products.find((p) => p.id === item.id)?.qty ?? 99}
-                    value={item.qty}
-                    style={{ width: 50 }}
-                    onChange={(e) => updateCartQty(setState, item.id, parseNum(e.target.value))}
-                  />
+                  {item.unitType ? (
+                    <span>1</span>
+                  ) : (
+                    <input
+                      type="number"
+                      min={1}
+                      max={state.products.find((p) => p.id === item.id)?.qty ?? 99}
+                      value={item.qty}
+                      style={{ width: 50 }}
+                      onChange={(e) => updateCartQty(setState, item.id, parseNum(e.target.value))}
+                    />
+                  )}
                 </td>
-                <td>{currency(item.price)}</td>
+                <td>
+                  {item.unitType ? 
+                    currency(item.price) : 
+                    currency(item.price)
+                  }
+                </td>
                 <td>{currency(item.price * item.qty)}</td>
                 <td>
-                  <button className="warn" onClick={() => removeFromCart(setState, item.id)}>
+                  <button 
+                    className="warn" 
+                    onClick={() => removeFromCart(setState, item.id, item.purchaseUnit)}
+                  >
                     Remove
                   </button>
                 </td>
