@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { currency, parseNum, getAvailableUnits, calculateUnitPrice } from '../../utils/helpers.js';
+import { currency, parseNum, getAvailableUnits, calculateUnitPrice, getUnitDisplayName } from '../../utils/helpers.js';
 import { addToCart, updateCartQty, removeFromCart } from '../../utils/business.js';
 import { checkout as checkoutAsync } from '../../utils/businessAsync.js';
 import { checkout as checkoutLocal } from '../../utils/business.js';
@@ -146,7 +146,7 @@ function Billing({ state, setState, setNotif, setTab, user }) {
               <div className="row" style={{ marginTop: 6 }}>
                 <span>
                   {p.unitType ? 
-                    `${currency(p.unitPrice)} per ${p.unitType}` : 
+                    `${currency(p.unitPrice)} ${getUnitDisplayName(p.unitType)}` : 
                     currency(p.price)
                   }
                 </span>

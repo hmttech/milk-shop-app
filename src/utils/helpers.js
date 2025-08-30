@@ -21,7 +21,7 @@ export const convertToBaseUnit = (quantity, unit, unitType) => {
 };
 
 export const getUnitDisplayName = (unitType) => {
-  return unitType === 'Kg' ? 'per Kg' : unitType === 'Litre' ? 'per Litre' : '';
+  return unitType === 'Kg' ? '(Per KG)' : unitType === 'Litre' ? '(Per Litre)' : '';
 };
 
 export const getAvailableUnits = (unitType) => {
