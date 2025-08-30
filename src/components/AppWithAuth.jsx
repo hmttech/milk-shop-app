@@ -49,6 +49,13 @@ function AppWithAuth() {
         // Check if the effect was cancelled (user changed or component unmounted)
         if (isCancelled) return
         
+        // Run smart quantity upgrade for existing users (migration handles its own completion tracking)
+        const upgradeResult = await dbService.upgradeProductsToSmartQuantity(currentUserId)
+        if (upgradeResult.success && upgradeResult.message !== 'Smart quantity upgrade already completed') {
+          setNotif(upgradeResult.message)
+          setTimeout(() => setNotif(''), 3000)
+        }
+        
         if (migrationResult.success) {
           setNotif(migrationResult.message)
           setTimeout(() => setNotif(''), 3000)

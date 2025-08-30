@@ -450,34 +450,29 @@ class DatabaseService {
 
     const defaultProducts = [
       {
-        name: 'Milk (500ml)',
+        name: 'Fresh Milk',
         category: 'Milk',
         description: 'Fresh cow milk',
-        price: 30,
-        qty: 100,
-        low_at: 10,
-      },
-      {
-        name: 'Milk (1L)',
-        category: 'Milk',
-        description: 'Fresh cow milk',
-        price: 60,
+        unitType: 'Litre',
+        unitPrice: 60.00, // Per Litre
         qty: 80,
         low_at: 10,
       },
       {
-        name: 'Ghee (500g)',
+        name: 'Pure Desi Ghee',
         category: 'Ghee',
         description: 'Pure desi ghee',
-        price: 450,
+        unitType: 'Kg',
+        unitPrice: 900.00, // Per KG
         qty: 20,
         low_at: 5,
       },
       {
-        name: 'Paneer (200g)',
+        name: 'Fresh Paneer',
         category: 'Paneer',
         description: 'Fresh paneer',
-        price: 90,
+        unitType: 'Kg',
+        unitPrice: 450.00, // Per KG
         qty: 30,
         low_at: 6,
       },
@@ -488,6 +483,14 @@ class DatabaseService {
         price: 180,
         qty: 15,
         low_at: 4,
+      },
+      {
+        name: 'Milk Packet (500ml)',
+        category: 'Milk',
+        description: 'Packaged cow milk',
+        price: 30,
+        qty: 100,
+        low_at: 10,
       },
     ]
 
@@ -569,6 +572,94 @@ class DatabaseService {
     }
 
     return data
+  }
+
+  // Migrate existing products to smart quantity format
+  async upgradeProductsToSmartQuantity(userId) {
+    this._checkSupabase()
+    
+    // Check if this upgrade was already performed
+    const initStatus = await this.getUserInitialization(userId)
+    if (initStatus.smart_quantity_upgrade_completed) {
+      return { success: true, message: 'Smart quantity upgrade already completed' }
+    }
+
+    const products = await this.getProducts(userId)
+    const upgradeMappings = [
+      // Old product name -> new smart product structure
+      { 
+        oldName: 'Milk (500ml)', 
+        newProduct: {
+          name: 'Fresh Milk',
+          category: 'Milk',
+          description: 'Fresh cow milk',
+          unitType: 'Litre',
+          unitPrice: 60.00, // ₹60 per Litre (500ml was ₹30)
+          price: null // Remove fixed price
+        }
+      },
+      { 
+        oldName: 'Milk (1L)', 
+        newProduct: {
+          name: 'Fresh Milk',
+          category: 'Milk', 
+          description: 'Fresh cow milk',
+          unitType: 'Litre',
+          unitPrice: 60.00, // ₹60 per Litre 
+          price: null
+        }
+      },
+      { 
+        oldName: 'Ghee (500g)', 
+        newProduct: {
+          name: 'Pure Desi Ghee',
+          category: 'Ghee',
+          description: 'Pure desi ghee', 
+          unitType: 'Kg',
+          unitPrice: 900.00, // ₹450 per 500g = ₹900 per kg
+          price: null
+        }
+      },
+      { 
+        oldName: 'Paneer (200g)', 
+        newProduct: {
+          name: 'Fresh Paneer',
+          category: 'Paneer',
+          description: 'Fresh paneer',
+          unitType: 'Kg', 
+          unitPrice: 450.00, // ₹90 per 200g = ₹450 per kg
+          price: null
+        }
+      }
+    ]
+
+    let upgradeCount = 0
+    for (const mapping of upgradeMappings) {
+      const existingProduct = products.find(p => p.name === mapping.oldName)
+      if (existingProduct) {
+        try {
+          // Update the existing product with new smart quantity structure
+          await this.updateProduct(userId, existingProduct.id, {
+            ...mapping.newProduct,
+            qty: existingProduct.qty, // Keep existing quantity
+            low_at: existingProduct.low_at || 5 // Keep existing low stock threshold
+          })
+          upgradeCount++
+        } catch (error) {
+          console.error(`Failed to upgrade product ${mapping.oldName}:`, error)
+        }
+      }
+    }
+
+    // Mark the upgrade as completed
+    await this.setUserInitialization(userId, { 
+      smart_quantity_upgrade_completed: true 
+    })
+
+    return { 
+      success: true, 
+      message: `Upgraded ${upgradeCount} products to smart quantity format` 
+    }
   }
 }
 
