@@ -8,7 +8,8 @@ function Bills({ state }) {
       {state.bills.length === 0 ? (
         <div className="muted">No bills yet.</div>
       ) : (
-        <table className="table">
+        <div className="table-wrapper">
+          <table className="table">
           <thead>
             <tr>
               <th>Invoice No</th>
@@ -56,6 +57,7 @@ function Bills({ state }) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

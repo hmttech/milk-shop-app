@@ -30,6 +30,19 @@ function AppWrapper() {
   return user ? <AppWithAuth /> : <Login />;
 }
 
+// Register service worker for PWA functionality
+if (typeof window !== 'undefined' && 'serviceWorker' in window.navigator) {
+  window.addEventListener('load', () => {
+    window.navigator.serviceWorker.register('/sw.js')
+      .then((registration) => {
+        console.log('SW registered: ', registration);
+      })
+      .catch((registrationError) => {
+        console.log('SW registration failed: ', registrationError);
+      });
+  });
+}
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AuthProvider>

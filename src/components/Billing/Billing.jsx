@@ -228,7 +228,8 @@ function Billing({ state, setState, setNotif, setTab, user }) {
       {state.cart.length === 0 ? (
         <div className="muted">Cart is empty.</div>
       ) : (
-        <table className="table">
+        <div className="table-wrapper">
+          <table className="table">
           <thead>
             <tr>
               <th>Item</th>
@@ -275,6 +276,7 @@ function Billing({ state, setState, setNotif, setTab, user }) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
       <div className="row right" style={{ marginTop: 8 }}>
         <strong>Subtotal: {currency(cartSubtotal)}</strong>

@@ -72,7 +72,8 @@ function Dashboard({ state }) {
       {state.bills.length === 0 ? (
         <div className="muted">No sales transactions yet.</div>
       ) : (
-        <table className="table">
+        <div className="table-wrapper">
+          <table className="table">
           <thead>
             <tr>
               <th>Invoice No</th>
@@ -98,6 +99,7 @@ function Dashboard({ state }) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );
@@ -114,7 +116,8 @@ function Dashboard({ state }) {
       {state.customers.length === 0 ? (
         <div className="muted">No customers yet.</div>
       ) : (
-        <table className="table">
+        <div className="table-wrapper">
+          <table className="table">
           <thead>
             <tr>
               <th>Name</th>
@@ -149,6 +152,7 @@ function Dashboard({ state }) {
             })}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );
@@ -165,7 +169,8 @@ function Dashboard({ state }) {
       {pendingBills.length === 0 ? (
         <div className="muted">No pending bills.</div>
       ) : (
-        <table className="table">
+        <div className="table-wrapper">
+          <table className="table">
           <thead>
             <tr>
               <th>Invoice No</th>
@@ -223,6 +228,7 @@ function Dashboard({ state }) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );
@@ -239,7 +245,8 @@ function Dashboard({ state }) {
       {lowStockProducts.length === 0 ? (
         <div className="muted">No low stock products.</div>
       ) : (
-        <table className="table">
+        <div className="table-wrapper">
+          <table className="table">
           <thead>
             <tr>
               <th>Product</th>
@@ -276,6 +283,7 @@ function Dashboard({ state }) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );

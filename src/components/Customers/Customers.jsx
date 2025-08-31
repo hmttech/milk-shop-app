@@ -115,7 +115,8 @@ function Customers({ state, setState, setNotif, user }) {
       {filtered.length === 0 ? (
         <div className="muted">No customers found.</div>
       ) : (
-        <table className="table">
+        <div className="table-wrapper">
+          <table className="table">
           <thead>
             <tr>
               <th>Name</th>
@@ -172,6 +173,7 @@ function Customers({ state, setState, setNotif, user }) {
             })}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );
