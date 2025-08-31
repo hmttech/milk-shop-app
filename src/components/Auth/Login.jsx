@@ -54,10 +54,25 @@ function Login() {
         width: '100%',
         maxWidth: '400px'
       }}>
-        <h1 style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          Govinda Dughdalay
-        </h1>
-        <h2 style={{ textAlign: 'center', marginBottom: '2rem' }}>
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <img 
+            src="/icons/govinda-dughdalay.png" 
+            alt="Govinda Dughdalay Logo"
+            style={{ 
+              width: '80px', 
+              height: '80px', 
+              objectFit: 'contain',
+              marginBottom: '1rem'
+            }}
+          />
+          <h1 style={{ margin: '0.5rem 0', fontSize: '1.5rem', color: '#11bb66' }}>
+            Govinda Dughdalay
+          </h1>
+          <p style={{ margin: '0', color: '#666', fontSize: '0.9rem' }}>
+            Milk Shop Manager
+          </p>
+        </div>
+        <h2 style={{ textAlign: 'center', marginBottom: '2rem', fontSize: '1.2rem' }}>
           {isSignUp ? 'Create Account' : 'Sign In'}
         </h2>
 

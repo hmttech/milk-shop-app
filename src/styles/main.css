@@ -30,6 +30,20 @@ header h1 {
   font-size: 18px;
 }
 
+header .logo-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+}
+
+header .logo-container img {
+  width: 40px;
+  height: 40px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
 header small {
   opacity: 0.9;
 }
@@ -132,6 +146,19 @@ header small {
   
   .container {
     padding: 12px;
+  }
+  
+  header .logo-container {
+    gap: 8px;
+  }
+  
+  header .logo-container img {
+    width: 32px;
+    height: 32px;
+  }
+  
+  header h1 {
+    font-size: 16px;
   }
   
   .row {
@@ -410,6 +437,11 @@ button.warn:hover {
   
   header h1 {
     font-size: 14px;
+  }
+  
+  header .logo-container img {
+    width: 32px;
+    height: 32px;
   }
   
   .container {

@@ -283,9 +283,15 @@ function AppWithAuth() {
   return (
     <>
       <header>
-        <h1>
-          Govinda Dughdalay <small>— Milk Shop Manager</small>
-        </h1>
+        <div className="logo-container">
+          <img 
+            src="/icons/govinda-dughdalay.png" 
+            alt="Govinda Dughdalay Logo"
+          />
+          <h1>
+            Govinda Dughdalay <small>— Milk Shop Manager</small>
+          </h1>
+        </div>
         <div className="row">
           <span className="pill ok">Multi-User Cloud</span>
           <span style={{ marginLeft: '1rem', color: '#666' }}>
