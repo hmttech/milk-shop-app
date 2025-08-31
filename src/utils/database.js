@@ -88,7 +88,13 @@ class DatabaseService {
       .order('created_at', { ascending: false })
 
     if (error) throw error
-    return data || []
+    
+    // Transform snake_case back to camelCase for JavaScript
+    return (data || []).map(product => ({
+      ...product,
+      unitType: product.unit_type,
+      unitPrice: product.unit_price
+    }))
   }
 
   // User initialization tracking methods
@@ -179,14 +185,17 @@ class DatabaseService {
   async createProduct(userId, product) {
     this._checkSupabase()
     
-    // Filter out camelCase fields that don't belong in database
+    // Transform camelCase to snake_case for database
     // eslint-disable-next-line no-unused-vars
-    const { lowAt, ...dbProduct } = product
+    const { lowAt, unitType, unitPrice, ...rest } = product
     
     const productData = {
       id: uid(),
       user_id: userId,
-      ...dbProduct,
+      ...rest,
+      // Map camelCase to snake_case for database columns
+      unit_type: unitType,
+      unit_price: unitPrice,
       created_at: todayISO(),
       updated_at: todayISO()
     }
@@ -216,32 +225,57 @@ class DatabaseService {
           }
           throw retryError
         }
-        return retryData[0]
+        // Transform snake_case back to camelCase for JavaScript
+        const retryResult = retryData[0]
+        return {
+          ...retryResult,
+          unitType: retryResult.unit_type,
+          unitPrice: retryResult.unit_price
+        }
       }
       throw error
     }
-    return data[0]
+    
+    // Transform snake_case back to camelCase for JavaScript
+    const result = data[0]
+    return {
+      ...result,
+      unitType: result.unit_type,
+      unitPrice: result.unit_price
+    }
   }
 
   async updateProduct(userId, productId, product) {
     this._checkSupabase()
     
-    // Filter out camelCase fields that don't belong in database
+    // Transform camelCase to snake_case for database
     // eslint-disable-next-line no-unused-vars
-    const { lowAt, ...dbProduct } = product
+    const { lowAt, unitType, unitPrice, ...rest } = product
+    
+    const dbProduct = {
+      ...rest,
+      // Map camelCase to snake_case for database columns
+      unit_type: unitType,
+      unit_price: unitPrice,
+      updated_at: todayISO()
+    }
     
     const { data, error } = await supabase
       .from('products')
-      .update({ 
-        ...dbProduct, 
-        updated_at: todayISO() 
-      })
+      .update(dbProduct)
       .eq('id', productId)
       .eq('user_id', userId)
       .select()
 
     if (error) throw error
-    return data[0]
+    
+    // Transform snake_case back to camelCase for JavaScript
+    const result = data[0]
+    return {
+      ...result,
+      unitType: result.unit_type,
+      unitPrice: result.unit_price
+    }
   }
 
   async deleteProduct(userId, productId) {
@@ -496,13 +530,19 @@ class DatabaseService {
 
     try {
       // Use batch insert with ON CONFLICT handling
-      const productsData = defaultProducts.map(product => ({
-        id: uid(),
-        user_id: userId,
-        ...product,
-        created_at: todayISO(),
-        updated_at: todayISO()
-      }))
+      const productsData = defaultProducts.map(product => {
+        // Transform camelCase to snake_case for database
+        const { unitType, unitPrice, ...rest } = product
+        return {
+          id: uid(),
+          user_id: userId,
+          ...rest,
+          unit_type: unitType,
+          unit_price: unitPrice,
+          created_at: todayISO(),
+          updated_at: todayISO()
+        }
+      })
 
       // Use upsert to handle conflicts gracefully
       const { data, error } = await supabase
@@ -575,78 +615,118 @@ class DatabaseService {
   }
 
   // Migrate existing products to smart quantity format
-  async upgradeProductsToSmartQuantity(userId) {
+  async upgradeProductsToSmartQuantity(userId, forceUpgrade = false) {
     this._checkSupabase()
     
-    // Check if this upgrade was already performed
+    // Check if this upgrade was already performed (unless forcing)
     const initStatus = await this.getUserInitialization(userId)
-    if (initStatus.smart_quantity_upgrade_completed) {
-      return { success: true, message: 'Smart quantity upgrade already completed' }
+    if (initStatus.smart_quantity_upgrade_completed && !forceUpgrade) {
+      // Even if marked complete, verify products actually have unitType fields
+      const products = await this.getProducts(userId)
+      const smartProducts = ['Fresh Milk', 'Pure Desi Ghee', 'Fresh Paneer']
+      const needsUpgrade = products.some(p => 
+        smartProducts.some(sp => p.name.includes(sp.replace('Fresh ', '').replace('Pure ', '').replace('Desi ', ''))) && 
+        !p.unitType
+      )
+      
+      if (!needsUpgrade) {
+        return { success: true, message: 'Smart quantity upgrade already completed' }
+      }
+      
+      // If products need upgrade despite being marked complete, continue with upgrade
     }
 
     const products = await this.getProducts(userId)
-    const upgradeMappings = [
-      // Old product name -> new smart product structure
-      { 
-        oldName: 'Milk (500ml)', 
-        newProduct: {
-          name: 'Fresh Milk',
-          category: 'Milk',
-          description: 'Fresh cow milk',
-          unitType: 'Litre',
-          unitPrice: 60.00, // ₹60 per Litre (500ml was ₹30)
-          price: null // Remove fixed price
-        }
+    
+    // Define smart product configurations for both old names and current names
+    const smartProductConfigs = [
+      {
+        name: 'Fresh Milk',
+        category: 'Milk',
+        description: 'Fresh cow milk',
+        unitType: 'Litre',
+        unitPrice: 60.00,
+        oldNames: ['Milk (500ml)', 'Milk (1L)', 'Fresh Milk']
       },
-      { 
-        oldName: 'Milk (1L)', 
-        newProduct: {
-          name: 'Fresh Milk',
-          category: 'Milk', 
-          description: 'Fresh cow milk',
-          unitType: 'Litre',
-          unitPrice: 60.00, // ₹60 per Litre 
-          price: null
-        }
+      {
+        name: 'Pure Desi Ghee',
+        category: 'Ghee',
+        description: 'Pure desi ghee',
+        unitType: 'Kg',
+        unitPrice: 900.00,
+        oldNames: ['Ghee (500g)', 'Pure Desi Ghee']
       },
-      { 
-        oldName: 'Ghee (500g)', 
-        newProduct: {
-          name: 'Pure Desi Ghee',
-          category: 'Ghee',
-          description: 'Pure desi ghee', 
-          unitType: 'Kg',
-          unitPrice: 900.00, // ₹450 per 500g = ₹900 per kg
-          price: null
-        }
-      },
-      { 
-        oldName: 'Paneer (200g)', 
-        newProduct: {
-          name: 'Fresh Paneer',
-          category: 'Paneer',
-          description: 'Fresh paneer',
-          unitType: 'Kg', 
-          unitPrice: 450.00, // ₹90 per 200g = ₹450 per kg
-          price: null
-        }
+      {
+        name: 'Fresh Paneer',
+        category: 'Paneer',
+        description: 'Fresh paneer',
+        unitType: 'Kg',
+        unitPrice: 450.00,
+        oldNames: ['Paneer (200g)', 'Fresh Paneer']
       }
     ]
 
     let upgradeCount = 0
-    for (const mapping of upgradeMappings) {
-      const existingProduct = products.find(p => p.name === mapping.oldName)
+    
+    for (const config of smartProductConfigs) {
+      // Find any product that matches this configuration (by any of the possible names)
+      const existingProduct = products.find(p => 
+        config.oldNames.some(oldName => 
+          p.name === oldName || 
+          p.name.toLowerCase().includes(config.name.toLowerCase().replace('fresh ', '').replace('pure ', '').replace('desi ', ''))
+        )
+      )
+      
       if (existingProduct) {
+        // Check if product already has unitType - if so, just ensure unitPrice is correct
+        if (existingProduct.unitType) {
+          // Product already has unitType, just verify/update unitPrice if needed
+          if (!existingProduct.unitPrice || existingProduct.unitPrice !== config.unitPrice) {
+            try {
+              await this.updateProduct(userId, existingProduct.id, {
+                unitPrice: config.unitPrice
+              })
+              upgradeCount++
+            } catch (error) {
+              console.error(`Failed to update unitPrice for ${existingProduct.name}:`, error)
+            }
+          }
+        } else {
+          // Product doesn't have unitType, upgrade it fully
+          try {
+            await this.updateProduct(userId, existingProduct.id, {
+              name: config.name,
+              category: config.category,
+              description: config.description,
+              unitType: config.unitType,
+              unitPrice: config.unitPrice,
+              price: null, // Remove fixed price for unit-based products
+              qty: existingProduct.qty || 50, // Keep existing quantity or default
+              low_at: existingProduct.low_at || 5 // Keep existing low stock threshold
+            })
+            upgradeCount++
+          } catch (error) {
+            console.error(`Failed to upgrade product ${existingProduct.name}:`, error)
+          }
+        }
+      } else {
+        // Product doesn't exist, create it
         try {
-          // Update the existing product with new smart quantity structure
-          await this.updateProduct(userId, existingProduct.id, {
-            ...mapping.newProduct,
-            qty: existingProduct.qty, // Keep existing quantity
-            low_at: existingProduct.low_at || 5 // Keep existing low stock threshold
+          await this.createProduct(userId, {
+            name: config.name,
+            category: config.category,
+            description: config.description,
+            unitType: config.unitType,
+            unitPrice: config.unitPrice,
+            qty: 50,
+            low_at: 5
           })
           upgradeCount++
         } catch (error) {
-          console.error(`Failed to upgrade product ${mapping.oldName}:`, error)
+          // Ignore if product already exists
+          if (!error.message.includes('already exists')) {
+            console.error(`Failed to create smart product ${config.name}:`, error)
+          }
         }
       }
     }
@@ -658,7 +738,7 @@ class DatabaseService {
 
     return { 
       success: true, 
-      message: `Upgraded ${upgradeCount} products to smart quantity format` 
+      message: upgradeCount > 0 ? `Upgraded ${upgradeCount} products to smart quantity format` : 'Smart products already configured'
     }
   }
 }

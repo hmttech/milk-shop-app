@@ -15,6 +15,8 @@ export async function addOrUpdateProduct(userId, setState, setEditingProduct, se
         category: p.category,
         description: p.description,
         price: parseNum(p.price),
+        unitType: p.unitType || null,
+        unitPrice: p.unitType ? parseNum(p.unitPrice) : null,
         qty: parseNum(p.qty),
         low_at: parseNum(p.lowAt || p.low_at || 5)
       })
@@ -25,6 +27,8 @@ export async function addOrUpdateProduct(userId, setState, setEditingProduct, se
         category: p.category,
         description: p.description,
         price: parseNum(p.price),
+        unitType: p.unitType || null,
+        unitPrice: p.unitType ? parseNum(p.unitPrice) : null,
         qty: parseNum(p.qty),
         low_at: parseNum(p.lowAt || p.low_at || 5)
       })
