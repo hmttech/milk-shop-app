@@ -88,7 +88,13 @@ class DatabaseService {
       .order('created_at', { ascending: false })
 
     if (error) throw error
-    return data || []
+    
+    // Transform snake_case back to camelCase for JavaScript
+    return (data || []).map(product => ({
+      ...product,
+      unitType: product.unit_type,
+      unitPrice: product.unit_price
+    }))
   }
 
   // User initialization tracking methods
@@ -179,14 +185,17 @@ class DatabaseService {
   async createProduct(userId, product) {
     this._checkSupabase()
     
-    // Filter out camelCase fields that don't belong in database
+    // Transform camelCase to snake_case for database
     // eslint-disable-next-line no-unused-vars
-    const { lowAt, ...dbProduct } = product
+    const { lowAt, unitType, unitPrice, ...rest } = product
     
     const productData = {
       id: uid(),
       user_id: userId,
-      ...dbProduct,
+      ...rest,
+      // Map camelCase to snake_case for database columns
+      unit_type: unitType,
+      unit_price: unitPrice,
       created_at: todayISO(),
       updated_at: todayISO()
     }
@@ -216,32 +225,57 @@ class DatabaseService {
           }
           throw retryError
         }
-        return retryData[0]
+        // Transform snake_case back to camelCase for JavaScript
+        const retryResult = retryData[0]
+        return {
+          ...retryResult,
+          unitType: retryResult.unit_type,
+          unitPrice: retryResult.unit_price
+        }
       }
       throw error
     }
-    return data[0]
+    
+    // Transform snake_case back to camelCase for JavaScript
+    const result = data[0]
+    return {
+      ...result,
+      unitType: result.unit_type,
+      unitPrice: result.unit_price
+    }
   }
 
   async updateProduct(userId, productId, product) {
     this._checkSupabase()
     
-    // Filter out camelCase fields that don't belong in database
+    // Transform camelCase to snake_case for database
     // eslint-disable-next-line no-unused-vars
-    const { lowAt, ...dbProduct } = product
+    const { lowAt, unitType, unitPrice, ...rest } = product
+    
+    const dbProduct = {
+      ...rest,
+      // Map camelCase to snake_case for database columns
+      unit_type: unitType,
+      unit_price: unitPrice,
+      updated_at: todayISO()
+    }
     
     const { data, error } = await supabase
       .from('products')
-      .update({ 
-        ...dbProduct, 
-        updated_at: todayISO() 
-      })
+      .update(dbProduct)
       .eq('id', productId)
       .eq('user_id', userId)
       .select()
 
     if (error) throw error
-    return data[0]
+    
+    // Transform snake_case back to camelCase for JavaScript
+    const result = data[0]
+    return {
+      ...result,
+      unitType: result.unit_type,
+      unitPrice: result.unit_price
+    }
   }
 
   async deleteProduct(userId, productId) {
@@ -496,13 +530,19 @@ class DatabaseService {
 
     try {
       // Use batch insert with ON CONFLICT handling
-      const productsData = defaultProducts.map(product => ({
-        id: uid(),
-        user_id: userId,
-        ...product,
-        created_at: todayISO(),
-        updated_at: todayISO()
-      }))
+      const productsData = defaultProducts.map(product => {
+        // Transform camelCase to snake_case for database
+        const { unitType, unitPrice, ...rest } = product
+        return {
+          id: uid(),
+          user_id: userId,
+          ...rest,
+          unit_type: unitType,
+          unit_price: unitPrice,
+          created_at: todayISO(),
+          updated_at: todayISO()
+        }
+      })
 
       // Use upsert to handle conflicts gracefully
       const { data, error } = await supabase
