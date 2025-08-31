@@ -575,78 +575,118 @@ class DatabaseService {
   }
 
   // Migrate existing products to smart quantity format
-  async upgradeProductsToSmartQuantity(userId) {
+  async upgradeProductsToSmartQuantity(userId, forceUpgrade = false) {
     this._checkSupabase()
     
-    // Check if this upgrade was already performed
+    // Check if this upgrade was already performed (unless forcing)
     const initStatus = await this.getUserInitialization(userId)
-    if (initStatus.smart_quantity_upgrade_completed) {
-      return { success: true, message: 'Smart quantity upgrade already completed' }
+    if (initStatus.smart_quantity_upgrade_completed && !forceUpgrade) {
+      // Even if marked complete, verify products actually have unitType fields
+      const products = await this.getProducts(userId)
+      const smartProducts = ['Fresh Milk', 'Pure Desi Ghee', 'Fresh Paneer']
+      const needsUpgrade = products.some(p => 
+        smartProducts.some(sp => p.name.includes(sp.replace('Fresh ', '').replace('Pure ', '').replace('Desi ', ''))) && 
+        !p.unitType
+      )
+      
+      if (!needsUpgrade) {
+        return { success: true, message: 'Smart quantity upgrade already completed' }
+      }
+      
+      // If products need upgrade despite being marked complete, continue with upgrade
     }
 
     const products = await this.getProducts(userId)
-    const upgradeMappings = [
-      // Old product name -> new smart product structure
-      { 
-        oldName: 'Milk (500ml)', 
-        newProduct: {
-          name: 'Fresh Milk',
-          category: 'Milk',
-          description: 'Fresh cow milk',
-          unitType: 'Litre',
-          unitPrice: 60.00, // ₹60 per Litre (500ml was ₹30)
-          price: null // Remove fixed price
-        }
+    
+    // Define smart product configurations for both old names and current names
+    const smartProductConfigs = [
+      {
+        name: 'Fresh Milk',
+        category: 'Milk',
+        description: 'Fresh cow milk',
+        unitType: 'Litre',
+        unitPrice: 60.00,
+        oldNames: ['Milk (500ml)', 'Milk (1L)', 'Fresh Milk']
       },
-      { 
-        oldName: 'Milk (1L)', 
-        newProduct: {
-          name: 'Fresh Milk',
-          category: 'Milk', 
-          description: 'Fresh cow milk',
-          unitType: 'Litre',
-          unitPrice: 60.00, // ₹60 per Litre 
-          price: null
-        }
+      {
+        name: 'Pure Desi Ghee',
+        category: 'Ghee',
+        description: 'Pure desi ghee',
+        unitType: 'Kg',
+        unitPrice: 900.00,
+        oldNames: ['Ghee (500g)', 'Pure Desi Ghee']
       },
-      { 
-        oldName: 'Ghee (500g)', 
-        newProduct: {
-          name: 'Pure Desi Ghee',
-          category: 'Ghee',
-          description: 'Pure desi ghee', 
-          unitType: 'Kg',
-          unitPrice: 900.00, // ₹450 per 500g = ₹900 per kg
-          price: null
-        }
-      },
-      { 
-        oldName: 'Paneer (200g)', 
-        newProduct: {
-          name: 'Fresh Paneer',
-          category: 'Paneer',
-          description: 'Fresh paneer',
-          unitType: 'Kg', 
-          unitPrice: 450.00, // ₹90 per 200g = ₹450 per kg
-          price: null
-        }
+      {
+        name: 'Fresh Paneer',
+        category: 'Paneer',
+        description: 'Fresh paneer',
+        unitType: 'Kg',
+        unitPrice: 450.00,
+        oldNames: ['Paneer (200g)', 'Fresh Paneer']
       }
     ]
 
     let upgradeCount = 0
-    for (const mapping of upgradeMappings) {
-      const existingProduct = products.find(p => p.name === mapping.oldName)
+    
+    for (const config of smartProductConfigs) {
+      // Find any product that matches this configuration (by any of the possible names)
+      const existingProduct = products.find(p => 
+        config.oldNames.some(oldName => 
+          p.name === oldName || 
+          p.name.toLowerCase().includes(config.name.toLowerCase().replace('fresh ', '').replace('pure ', '').replace('desi ', ''))
+        )
+      )
+      
       if (existingProduct) {
+        // Check if product already has unitType - if so, just ensure unitPrice is correct
+        if (existingProduct.unitType) {
+          // Product already has unitType, just verify/update unitPrice if needed
+          if (!existingProduct.unitPrice || existingProduct.unitPrice !== config.unitPrice) {
+            try {
+              await this.updateProduct(userId, existingProduct.id, {
+                unitPrice: config.unitPrice
+              })
+              upgradeCount++
+            } catch (error) {
+              console.error(`Failed to update unitPrice for ${existingProduct.name}:`, error)
+            }
+          }
+        } else {
+          // Product doesn't have unitType, upgrade it fully
+          try {
+            await this.updateProduct(userId, existingProduct.id, {
+              name: config.name,
+              category: config.category,
+              description: config.description,
+              unitType: config.unitType,
+              unitPrice: config.unitPrice,
+              price: null, // Remove fixed price for unit-based products
+              qty: existingProduct.qty || 50, // Keep existing quantity or default
+              low_at: existingProduct.low_at || 5 // Keep existing low stock threshold
+            })
+            upgradeCount++
+          } catch (error) {
+            console.error(`Failed to upgrade product ${existingProduct.name}:`, error)
+          }
+        }
+      } else {
+        // Product doesn't exist, create it
         try {
-          // Update the existing product with new smart quantity structure
-          await this.updateProduct(userId, existingProduct.id, {
-            ...mapping.newProduct,
-            qty: existingProduct.qty, // Keep existing quantity
-            low_at: existingProduct.low_at || 5 // Keep existing low stock threshold
+          await this.createProduct(userId, {
+            name: config.name,
+            category: config.category,
+            description: config.description,
+            unitType: config.unitType,
+            unitPrice: config.unitPrice,
+            qty: 50,
+            low_at: 5
           })
           upgradeCount++
         } catch (error) {
-          console.error(`Failed to upgrade product ${mapping.oldName}:`, error)
+          // Ignore if product already exists
+          if (!error.message.includes('already exists')) {
+            console.error(`Failed to create smart product ${config.name}:`, error)
+          }
         }
       }
     }
@@ -658,7 +698,7 @@ class DatabaseService {
 
     return { 
       success: true, 
-      message: `Upgraded ${upgradeCount} products to smart quantity format` 
+      message: upgradeCount > 0 ? `Upgraded ${upgradeCount} products to smart quantity format` : 'Smart products already configured'
     }
   }
 }
