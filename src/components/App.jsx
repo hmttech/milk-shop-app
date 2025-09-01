@@ -6,6 +6,7 @@ import Customers from './Customers/Customers.jsx';
 import Bills from './Bills/Bills.jsx';
 import Dashboard from './Dashboard/Dashboard.jsx';
 import WhatsAppMarketing from './WhatsAppMarketing/WhatsAppMarketing.jsx';
+import Deliveries from './Deliveries/Deliveries.jsx';
 
 function App() {
   const [state, setState] = useState(loadState());
@@ -51,6 +52,7 @@ function App() {
     ['Customers', Customers],
     ['Bills', Bills],
     ['Dashboard', Dashboard],
+    ['Deliveries', Deliveries],
     ['WhatsApp Marketing', WhatsAppMarketing],
   ];
 

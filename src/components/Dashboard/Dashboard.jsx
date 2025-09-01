@@ -3,8 +3,10 @@ import { currency } from '../../utils/helpers.js';
 
 function Dashboard({ state }) {
   const [activeView, setActiveView] = useState(null);
-  // Total sales
-  const totalSales = state.bills.reduce((sum, b) => sum + b.total, 0);
+  // Total sales (from bills + deliveries)
+  const billsSales = state.bills.reduce((sum, b) => sum + b.total, 0);
+  const deliveriesSales = (state.deliveries || []).reduce((sum, d) => sum + d.total, 0);
+  const totalSales = billsSales + deliveriesSales;
   // Total customers
   const totalCustomers = state.customers.length;
   // Pending bills
@@ -32,7 +34,10 @@ function Dashboard({ state }) {
       const daySales = state.bills
         .filter((b) => new Date(b.createdAt).toLocaleDateString() === dayStr)
         .reduce((sum, b) => sum + b.total, 0);
-      sales.push(daySales);
+      const dayDeliveries = (state.deliveries || [])
+        .filter((d) => new Date(d.createdAt).toLocaleDateString() === dayStr)
+        .reduce((sum, d) => sum + d.total, 0);
+      sales.push(daySales + dayDeliveries);
     }
     new window.Chart(ctx, {
       type: 'bar',
@@ -42,7 +47,7 @@ function Dashboard({ state }) {
       },
       options: { plugins: { legend: { display: false } } },
     });
-  }, [state.bills]);
+  }, [state.bills, state.deliveries]);
 
   // Render detailed views
   const renderDetailView = () => {
@@ -61,48 +66,62 @@ function Dashboard({ state }) {
   };
 
   // Detailed view for Total Sales
-  const renderSalesDetail = () => (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-        <button onClick={() => setActiveView(null)} style={{ marginRight: 12 }}>
-          ← Back to Dashboard
-        </button>
-        <h2 style={{ margin: 0 }}>All Sales Transactions</h2>
-      </div>
-      {state.bills.length === 0 ? (
-        <div className="muted">No sales transactions yet.</div>
-      ) : (
-        <div className="table-wrapper">
-          <table className="table">
-          <thead>
-            <tr>
-              <th>Invoice No</th>
-              <th>Customer</th>
-              <th>Total</th>
-              <th>Status</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {state.bills.map((b) => (
-              <tr key={b.id}>
-                <td>{b.invoiceNo}</td>
-                <td>{b.customer?.name || '-'}</td>
-                <td>{currency(b.total)}</td>
-                <td>
-                  <span className={`pill ${b.status === 'Paid' ? 'ok' : 'bad'}`}>
-                    {b.status}
-                  </span>
-                </td>
-                <td>{new Date(b.createdAt).toLocaleString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+  const renderSalesDetail = () => {
+    // Combine bills and deliveries
+    const allTransactions = [
+      ...state.bills.map(b => ({ ...b, type: 'Bill' })),
+      ...(state.deliveries || []).map(d => ({ ...d, type: 'Delivery', status: 'Delivered' }))
+    ].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+    return (
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+          <button onClick={() => setActiveView(null)} style={{ marginRight: 12 }}>
+            ← Back to Dashboard
+          </button>
+          <h2 style={{ margin: 0 }}>All Sales Transactions</h2>
         </div>
-      )}
-    </div>
-  );
+        {allTransactions.length === 0 ? (
+          <div className="muted">No sales transactions yet.</div>
+        ) : (
+          <div className="table-wrapper">
+            <table className="table">
+            <thead>
+              <tr>
+                <th>Type</th>
+                <th>Invoice/ID</th>
+                <th>Customer</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {allTransactions.map((t) => (
+                <tr key={`${t.type}-${t.id}`}>
+                  <td>
+                    <span className={`pill ${t.type === 'Bill' ? 'ok' : 'primary'}`}>
+                      {t.type}
+                    </span>
+                  </td>
+                  <td>{t.invoiceNo || t.id}</td>
+                  <td>{t.customer?.name || t.customerName || '-'}</td>
+                  <td>{currency(t.total)}</td>
+                  <td>
+                    <span className={`pill ${t.status === 'Paid' || t.status === 'Delivered' ? 'ok' : 'bad'}`}>
+                      {t.status}
+                    </span>
+                  </td>
+                  <td>{new Date(t.createdAt).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
+        )}
+      </div>
+    );
+  };
 
   // Detailed view for Total Customers
   const renderCustomersDetail = () => (
