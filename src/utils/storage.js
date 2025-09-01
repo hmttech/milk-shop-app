@@ -64,6 +64,7 @@ const defaultState = {
   customers: [],
   bills: [],
   cart: [],
+  deliveries: [],
 };
 
 export function loadState() {
@@ -78,6 +79,7 @@ export function loadState() {
       customers: Array.isArray(s.customers) ? s.customers : [],
       bills: Array.isArray(s.bills) ? s.bills : [],
       cart: Array.isArray(s.cart) ? s.cart : [],
+      deliveries: Array.isArray(s.deliveries) ? s.deliveries : [],
     };
   } catch {
     return defaultState;

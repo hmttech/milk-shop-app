@@ -9,6 +9,7 @@ import Customers from './Customers/Customers.jsx'
 import Bills from './Bills/Bills.jsx'
 import Dashboard from './Dashboard/Dashboard.jsx'
 import WhatsAppMarketing from './WhatsAppMarketing/WhatsAppMarketing.jsx'
+import Deliveries from './Deliveries/Deliveries.jsx'
 
 function AppWithAuth() {
   const { user, signOut } = useAuth()
@@ -18,6 +19,7 @@ function AppWithAuth() {
     customers: [],
     bills: [],
     cart: [],
+    deliveries: [],
   })
   const [tab, setTab] = useState('Billing')
   const [editingProduct, setEditingProduct] = useState(null)
@@ -244,6 +246,7 @@ function AppWithAuth() {
     'Customers',
     'Bills',
     'Dashboard',
+    'Deliveries',
     'WhatsApp Marketing',
   ]
 
@@ -273,6 +276,8 @@ function AppWithAuth() {
         return <Bills {...appProps} />
       case 'Dashboard':
         return <Dashboard {...appProps} />
+      case 'Deliveries':
+        return <Deliveries {...appProps} />
       case 'WhatsApp Marketing':
         return <WhatsAppMarketing {...appProps} />
       default:
@@ -331,7 +336,7 @@ function AppWithAuth() {
       </div>
 
       <div className="footer">
-        © <span>{new Date().getFullYear()}</span> Govinda Dughdalay
+        © <span>{new Date().getFullYear()}</span> Govinda Dughdalay | Powered by HMT Technologies
       </div>
     </>
   )
