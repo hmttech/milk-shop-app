@@ -331,7 +331,7 @@ function AppWithAuth() {
       </div>
 
       <div className="footer">
-        © <span>{new Date().getFullYear()}</span> Govinda Dughdalay
+        © <span>{new Date().getFullYear()}</span> Govinda Dughdalay | Powered by HMT Technologies
       </div>
     </>
   )
