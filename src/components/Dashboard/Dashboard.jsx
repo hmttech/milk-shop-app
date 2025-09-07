@@ -3,12 +3,12 @@ import { currency } from '../../utils/helpers.js';
 
 function Dashboard({ state }) {
   const [activeView, setActiveView] = useState(null);
-  const [chartPeriod, setChartPeriod] = useState('days'); // 'days', 'month', 'custom'
+  const [chartPeriod, setChartPeriod] = useState('days'); // 'days3', 'days', 'days14', 'month', 'days90', 'thisWeek', 'lastWeek', 'thisMonth', 'lastMonth', 'ytd', 'custom'
   const [customDateRange, setCustomDateRange] = useState({
     start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0]
   });
-  const [chartType, setChartType] = useState('bar'); // 'bar', 'line'
+  const [chartType, setChartType] = useState('bar'); // 'bar', 'line', 'area', 'pie'
   // Total sales
   const totalSales = state.bills.reduce((sum, b) => sum + b.total, 0);
   // Total customers
@@ -18,69 +18,105 @@ function Dashboard({ state }) {
   // Low stock products
   const lowStockProducts = state.products.filter((p) => p.qty <= (p.lowAt ?? 5));
 
+  // Helper function to get date range for periods
+  const getDateRange = useCallback((period) => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    
+    switch (period) {
+      case 'days3':
+        return { days: 3, title: 'Last 3 Days' };
+      case 'days':
+        return { days: 7, title: 'Last 7 Days' };
+      case 'days14':
+        return { days: 14, title: 'Last 14 Days' };
+      case 'month':
+        return { days: 30, title: 'Last 30 Days' };
+      case 'days90':
+        return { days: 90, title: 'Last 90 Days' };
+      case 'thisWeek': {
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        const daysDiff = Math.ceil((today - startOfWeek) / (1000 * 60 * 60 * 24));
+        return { days: daysDiff + 1, title: 'This Week', startDate: startOfWeek };
+      }
+      case 'lastWeek': {
+        const startOfLastWeek = new Date(today);
+        startOfLastWeek.setDate(today.getDate() - today.getDay() - 7);
+        return { days: 7, title: 'Last Week', startDate: startOfLastWeek };
+      }
+      case 'thisMonth': {
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        const daysDiff = Math.ceil((today - startOfMonth) / (1000 * 60 * 60 * 24));
+        return { days: daysDiff + 1, title: 'This Month', startDate: startOfMonth };
+      }
+      case 'lastMonth': {
+        const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+        const daysDiff = Math.ceil((endOfLastMonth - startOfLastMonth) / (1000 * 60 * 60 * 24));
+        return { days: daysDiff + 1, title: 'Last Month', startDate: startOfLastMonth, endDate: endOfLastMonth };
+      }
+      case 'ytd': {
+        const startOfYear = new Date(today.getFullYear(), 0, 1);
+        const daysDiff = Math.ceil((today - startOfYear) / (1000 * 60 * 60 * 24));
+        return { days: daysDiff + 1, title: 'Year to Date', startDate: startOfYear };
+      }
+      default:
+        return { days: 7, title: 'Last 7 Days' };
+    }
+  }, []);
+
   // Helper function to generate chart data based on period
   const generateChartData = useCallback(() => {
     let labels = [];
     let salesData = [];
     let title = '';
 
-    switch (chartPeriod) {
-      case 'days': {
-        title = 'Sales (Last 7 Days)';
-        for (let i = 6; i >= 0; i--) {
-          const d = new Date();
-          d.setDate(d.getDate() - i);
-          const dayStr = d.toLocaleDateString();
-          labels.push(dayStr);
-          const daySales = state.bills
-            .filter((b) => new Date(b.createdAt).toLocaleDateString() === dayStr)
-            .reduce((sum, b) => sum + b.total, 0);
-          salesData.push(daySales);
-        }
-        break;
+    if (chartPeriod === 'custom') {
+      title = `Sales (${customDateRange.start} to ${customDateRange.end})`;
+      const startDate = new Date(customDateRange.start);
+      const endDate = new Date(customDateRange.end);
+      const diffTime = Math.abs(endDate - startDate);
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      for (let i = 0; i <= diffDays; i++) {
+        const d = new Date(startDate);
+        d.setDate(startDate.getDate() + i);
+        const dayStr = d.toLocaleDateString();
+        labels.push(dayStr);
+        const daySales = state.bills
+          .filter((b) => new Date(b.createdAt).toLocaleDateString() === dayStr)
+          .reduce((sum, b) => sum + b.total, 0);
+        salesData.push(daySales);
       }
-
-      case 'month': {
-        title = 'Sales (Last 30 Days)';
-        for (let i = 29; i >= 0; i--) {
-          const d = new Date();
-          d.setDate(d.getDate() - i);
-          const dayStr = d.toLocaleDateString();
-          labels.push(dayStr);
-          const daySales = state.bills
-            .filter((b) => new Date(b.createdAt).toLocaleDateString() === dayStr)
-            .reduce((sum, b) => sum + b.total, 0);
-          salesData.push(daySales);
-        }
-        break;
+    } else {
+      const range = getDateRange(chartPeriod);
+      title = `Sales (${range.title})`;
+      
+      const startDate = range.startDate || new Date();
+      
+      if (!range.startDate) {
+        startDate.setDate(startDate.getDate() - (range.days - 1));
       }
-
-      case 'custom': {
-        title = `Sales (${customDateRange.start} to ${customDateRange.end})`;
-        const startDate = new Date(customDateRange.start);
-        const endDate = new Date(customDateRange.end);
-        const diffTime = Math.abs(endDate - startDate);
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+      
+      for (let i = 0; i < range.days; i++) {
+        const d = new Date(startDate);
+        d.setDate(startDate.getDate() + i);
         
-        for (let i = 0; i <= diffDays; i++) {
-          const d = new Date(startDate);
-          d.setDate(startDate.getDate() + i);
-          const dayStr = d.toLocaleDateString();
-          labels.push(dayStr);
-          const daySales = state.bills
-            .filter((b) => new Date(b.createdAt).toLocaleDateString() === dayStr)
-            .reduce((sum, b) => sum + b.total, 0);
-          salesData.push(daySales);
-        }
-        break;
+        // Stop if we've reached beyond the end date for specific periods
+        if (range.endDate && d > range.endDate) break;
+        
+        const dayStr = d.toLocaleDateString();
+        labels.push(dayStr);
+        const daySales = state.bills
+          .filter((b) => new Date(b.createdAt).toLocaleDateString() === dayStr)
+          .reduce((sum, b) => sum + b.total, 0);
+        salesData.push(daySales);
       }
-
-      default:
-        title = 'Sales';
     }
 
     return { labels, salesData, title };
-  }, [chartPeriod, customDateRange, state.bills]);
+  }, [chartPeriod, customDateRange, state.bills, getDateRange]);
 
   // Helper function for time-wise analysis (hourly breakdown for today)
   const generateHourlyData = useCallback(() => {
@@ -102,6 +138,85 @@ function Dashboard({ state }) {
     return { labels, salesData, title: 'Today&apos;s Sales by Hour' };
   }, [state.bills]);
 
+  // Helper function for quick date presets
+  const setQuickDateRange = useCallback((preset) => {
+    const today = new Date();
+    const todayStr = today.toISOString().split('T')[0];
+    
+    switch (preset) {
+      case 'yesterday': {
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        const yesterdayStr = yesterday.toISOString().split('T')[0];
+        setCustomDateRange({ start: yesterdayStr, end: yesterdayStr });
+        break;
+      }
+      case 'thisWeek': {
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        setCustomDateRange({ 
+          start: startOfWeek.toISOString().split('T')[0], 
+          end: todayStr 
+        });
+        break;
+      }
+      case 'lastWeek': {
+        const startOfLastWeek = new Date(today);
+        startOfLastWeek.setDate(today.getDate() - today.getDay() - 7);
+        const endOfLastWeek = new Date(startOfLastWeek);
+        endOfLastWeek.setDate(startOfLastWeek.getDate() + 6);
+        setCustomDateRange({ 
+          start: startOfLastWeek.toISOString().split('T')[0], 
+          end: endOfLastWeek.toISOString().split('T')[0] 
+        });
+        break;
+      }
+      case 'thisMonth': {
+        const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+        setCustomDateRange({ 
+          start: startOfMonth.toISOString().split('T')[0], 
+          end: todayStr 
+        });
+        break;
+      }
+      case 'lastMonth': {
+        const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0);
+        setCustomDateRange({ 
+          start: startOfLastMonth.toISOString().split('T')[0], 
+          end: endOfLastMonth.toISOString().split('T')[0] 
+        });
+        break;
+      }
+      default:
+        break;
+    }
+  }, []);
+
+  // Helper function to refresh charts
+  const refreshCharts = useCallback(() => {
+    // Force re-render of charts by updating a timestamp
+    const salesChart = document.getElementById('salesChart');
+    const hourlyChart = document.getElementById('hourlyChart');
+    
+    if (salesChart && window.Chart && window.Chart.getChart) {
+      const existingChart = window.Chart.getChart(salesChart);
+      if (existingChart) {
+        existingChart.destroy();
+      }
+    }
+    
+    if (hourlyChart && window.Chart && window.Chart.getChart) {
+      const existingChart = window.Chart.getChart(hourlyChart);
+      if (existingChart) {
+        existingChart.destroy();
+      }
+    }
+    
+    // Trigger useEffect by changing state slightly
+    setChartPeriod(prev => prev);
+  }, []);
+
   useEffect(() => {
     // Chart for sales based on selected period - only if Chart.js is available
     const ctx = document.getElementById('salesChart');
@@ -115,23 +230,33 @@ function Dashboard({ state }) {
     const chartData = generateChartData();
     
     new window.Chart(ctx, {
-      type: chartType,
+      type: chartType === 'area' ? 'line' : chartType,
       data: {
         labels: chartData.labels,
         datasets: [{ 
           label: 'Sales (₹)', 
           data: chartData.salesData, 
-          backgroundColor: chartType === 'line' ? 'transparent' : '#1b6',
-          borderColor: '#1b6',
-          borderWidth: chartType === 'line' ? 2 : 0,
-          fill: chartType === 'line' ? false : true,
-          tension: chartType === 'line' ? 0.1 : 0
+          backgroundColor: chartType === 'line' ? 'transparent' : 
+                          chartType === 'area' ? 'rgba(17, 187, 102, 0.2)' :
+                          chartType === 'pie' ? [
+                            '#1bb666', '#e74c3c', '#3498db', '#f39c12', '#9b59b6',
+                            '#2ecc71', '#e67e22', '#34495e', '#1abc9c', '#f1c40f'
+                          ] : '#1bb666',
+          borderColor: chartType === 'pie' ? '#fff' : '#1bb666',
+          borderWidth: chartType === 'line' || chartType === 'area' ? 2 : chartType === 'pie' ? 2 : 0,
+          fill: chartType === 'area' ? true : chartType === 'line' ? false : true,
+          tension: chartType === 'line' || chartType === 'area' ? 0.1 : 0
         }],
       },
       options: { 
-        plugins: { legend: { display: false } },
+        plugins: { 
+          legend: { 
+            display: chartType === 'pie',
+            position: 'bottom'
+          } 
+        },
         responsive: true,
-        scales: {
+        scales: chartType === 'pie' ? {} : {
           y: {
             beginAtZero: true,
             ticks: {
@@ -477,9 +602,26 @@ function Dashboard({ state }) {
       
       {/* Chart Controls */}
       <div style={{ marginTop: 32, marginBottom: 16 }}>
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px', marginBottom: '16px' }}>
           <h3 style={{ margin: 0, marginRight: 16 }}>Sales Analytics</h3>
           
+          <button 
+            onClick={refreshCharts}
+            style={{ 
+              padding: '6px 12px', 
+              borderRadius: '4px', 
+              border: '1px solid #1bb666', 
+              backgroundColor: '#1bb666', 
+              color: 'white',
+              cursor: 'pointer',
+              fontSize: '0.85em'
+            }}
+          >
+            🔄 Refresh
+          </button>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <label style={{ fontSize: '0.9em', fontWeight: 'bold' }}>Period:</label>
             <select 
@@ -487,8 +629,16 @@ function Dashboard({ state }) {
               onChange={(e) => setChartPeriod(e.target.value)}
               style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
             >
+              <option value="days3">Last 3 Days</option>
               <option value="days">Last 7 Days</option>
+              <option value="days14">Last 14 Days</option>
               <option value="month">Last 30 Days</option>
+              <option value="days90">Last 90 Days</option>
+              <option value="thisWeek">This Week</option>
+              <option value="lastWeek">Last Week</option>
+              <option value="thisMonth">This Month</option>
+              <option value="lastMonth">Last Month</option>
+              <option value="ytd">Year to Date</option>
               <option value="custom">Custom Range</option>
             </select>
           </div>
@@ -502,25 +652,56 @@ function Dashboard({ state }) {
             >
               <option value="bar">Bar Chart</option>
               <option value="line">Line Chart</option>
+              <option value="area">Area Chart</option>
+              <option value="pie">Pie Chart</option>
             </select>
           </div>
 
           {chartPeriod === 'custom' && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <label style={{ fontSize: '0.9em', fontWeight: 'bold' }}>From:</label>
-              <input
-                type="date"
-                value={customDateRange.start}
-                onChange={(e) => setCustomDateRange(prev => ({ ...prev, start: e.target.value }))}
-                style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
-              />
-              <label style={{ fontSize: '0.9em', fontWeight: 'bold' }}>To:</label>
-              <input
-                type="date"
-                value={customDateRange.end}
-                onChange={(e) => setCustomDateRange(prev => ({ ...prev, end: e.target.value }))}
-                style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
-              />
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <label style={{ fontSize: '0.9em', fontWeight: 'bold' }}>From:</label>
+                <input
+                  type="date"
+                  value={customDateRange.start}
+                  onChange={(e) => setCustomDateRange(prev => ({ ...prev, start: e.target.value }))}
+                  style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                />
+                <label style={{ fontSize: '0.9em', fontWeight: 'bold' }}>To:</label>
+                <input
+                  type="date"
+                  value={customDateRange.end}
+                  onChange={(e) => setCustomDateRange(prev => ({ ...prev, end: e.target.value }))}
+                  style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
+                />
+              </div>
+              
+              <div style={{ display: 'flex', alignItems: 'center', gap: '4px', flexWrap: 'wrap' }}>
+                <span style={{ fontSize: '0.85em', color: '#666', marginRight: '4px' }}>Quick:</span>
+                {[
+                  { key: 'yesterday', label: 'Yesterday' },
+                  { key: 'thisWeek', label: 'This Week' },
+                  { key: 'lastWeek', label: 'Last Week' },
+                  { key: 'thisMonth', label: 'This Month' },
+                  { key: 'lastMonth', label: 'Last Month' }
+                ].map(preset => (
+                  <button
+                    key={preset.key}
+                    onClick={() => setQuickDateRange(preset.key)}
+                    style={{
+                      padding: '2px 6px',
+                      fontSize: '0.75em',
+                      borderRadius: '3px',
+                      border: '1px solid #ccc',
+                      backgroundColor: '#f8f9fa',
+                      cursor: 'pointer',
+                      color: '#495057'
+                    }}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
