@@ -9,13 +9,7 @@ function Dashboard({ state }) {
     end: new Date().toISOString().split('T')[0]
   });
   const [chartType, setChartType] = useState('bar'); // 'bar', 'line', 'area', 'pie'
-  // Total sales
-  const totalSales = state.bills.reduce((sum, b) => sum + b.total, 0);
-  // Total customers
-  const totalCustomers = state.customers.length;
-  // Pending bills
-  const pendingBills = state.bills.filter((b) => b.status === 'Pending');
-  // Low stock products
+  // Low stock products (this remains all-time)
   const lowStockProducts = state.products.filter((p) => p.qty <= (p.lowAt ?? 5));
 
   // Helper function to get date range for periods
@@ -65,6 +59,64 @@ function Dashboard({ state }) {
         return { days: 7, title: 'Last 7 Days' };
     }
   }, []);
+
+  // Helper function to get period-specific data
+  const getPeriodData = useCallback(() => {
+    let startDate, endDate, periodTitle;
+
+    if (chartPeriod === 'custom') {
+      startDate = new Date(customDateRange.start);
+      endDate = new Date(customDateRange.end);
+      endDate.setHours(23, 59, 59, 999); // Include the entire end date
+      periodTitle = `(${customDateRange.start} to ${customDateRange.end})`;
+    } else {
+      const range = getDateRange(chartPeriod);
+      periodTitle = `(${range.title})`;
+      
+      if (range.startDate) {
+        startDate = new Date(range.startDate);
+      } else {
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - (range.days - 1));
+      }
+      
+      if (range.endDate) {
+        endDate = new Date(range.endDate);
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        endDate = new Date();
+        endDate.setHours(23, 59, 59, 999);
+      }
+    }
+
+    // Filter bills within the period
+    const periodBills = state.bills.filter((bill) => {
+      const billDate = new Date(bill.createdAt);
+      return billDate >= startDate && billDate <= endDate;
+    });
+
+    // Calculate period sales
+    const periodSales = periodBills.reduce((sum, b) => sum + b.total, 0);
+
+    // Get customers who made purchases in the period
+    const periodCustomerIds = new Set(periodBills.map(b => b.customer?.id).filter(Boolean));
+    const periodCustomersCount = periodCustomerIds.size;
+
+    // Get pending bills created in the period
+    const periodPendingBills = periodBills.filter((b) => b.status === 'Pending');
+
+    return {
+      sales: periodSales,
+      customersCount: periodCustomersCount,
+      pendingBillsCount: periodPendingBills.length,
+      periodTitle
+    };
+  }, [chartPeriod, customDateRange, state.bills, getDateRange]);
+
+  const periodData = getPeriodData();
+
+  // Pending bills (used in detailed views)
+  const pendingBills = state.bills.filter((b) => b.status === 'Pending');
 
   // Helper function to generate chart data based on period
   const generateChartData = useCallback(() => {
@@ -571,24 +623,24 @@ function Dashboard({ state }) {
           style={{ cursor: 'pointer' }}
           onClick={() => setActiveView('sales')}
         >
-          <strong>Total Sales</strong>
-          <div style={{ fontSize: 22, margin: '8px 0' }}>{currency(totalSales)}</div>
+          <strong>Sales {periodData.periodTitle}</strong>
+          <div style={{ fontSize: 22, margin: '8px 0' }}>{currency(periodData.sales)}</div>
         </div>
         <div 
           className="card"
           style={{ cursor: 'pointer' }}
           onClick={() => setActiveView('customers')}
         >
-          <strong>Total Customers</strong>
-          <div style={{ fontSize: 22, margin: '8px 0' }}>{totalCustomers}</div>
+          <strong>Customers {periodData.periodTitle}</strong>
+          <div style={{ fontSize: 22, margin: '8px 0' }}>{periodData.customersCount}</div>
         </div>
         <div 
           className="card"
           style={{ cursor: 'pointer' }}
           onClick={() => setActiveView('pendingBills')}
         >
-          <strong>Pending Bills</strong>
-          <div style={{ fontSize: 22, margin: '8px 0' }}>{pendingBills.length}</div>
+          <strong>Pending Bills {periodData.periodTitle}</strong>
+          <div style={{ fontSize: 22, margin: '8px 0' }}>{periodData.pendingBillsCount}</div>
         </div>
         <div 
           className="card"
