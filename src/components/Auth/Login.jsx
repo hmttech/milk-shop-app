@@ -150,6 +150,15 @@ function Login() {
             {isSignUp ? 'Already have an account? Sign In' : "Don't have an account? Sign Up"}
           </button>
         </form>
+        
+        <div style={{ 
+          textAlign: 'center', 
+          marginTop: '2rem', 
+          fontSize: '0.8rem', 
+          color: '#999' 
+        }}>
+          © <span>{new Date().getFullYear()}</span> Govinda Dughdalay | Powered by HMT Technologies
+        </div>
       </div>
     </div>
   )
