@@ -466,3 +466,57 @@ button.warn:hover {
     border-width: 0.5px;
   }
 }
+
+/* Chart responsive styles */
+@media (max-width: 768px) {
+  /* Reduce chart heights on mobile */
+  canvas#salesChart {
+    height: 250px !important;
+  }
+  
+  canvas#hourlyChart {
+    height: 200px !important;
+  }
+  
+  /* Ensure chart containers don't overflow */
+  div[style*="position: relative"] {
+    max-width: 100%;
+    overflow: hidden;
+  }
+  
+  /* Make chart controls stack better on mobile */
+  div[style*="flexWrap: wrap"] {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 8px !important;
+  }
+  
+  /* Improve quick preset buttons layout on mobile */
+  div[style*="gap: 4px"] button {
+    margin: 2px;
+    font-size: 0.7em !important;
+    padding: 2px 5px !important;
+  }
+}
+
+@media (max-width: 480px) {
+  /* Further reduce chart heights on very small screens */
+  canvas#salesChart {
+    height: 200px !important;
+  }
+  
+  canvas#hourlyChart {
+    height: 150px !important;
+  }
+  
+  /* Stack date inputs vertically */
+  div[style*="gap: 8px"] {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+  }
+  
+  /* Adjust font sizes for better readability */
+  h4 {
+    font-size: 16px;
+  }
+}

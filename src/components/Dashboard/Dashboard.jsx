@@ -115,9 +115,6 @@ function Dashboard({ state }) {
 
   const periodData = getPeriodData();
 
-  // Pending bills (used in detailed views)
-  const pendingBills = state.bills.filter((b) => b.status === 'Pending');
-
   // Helper function to generate chart data based on period
   const generateChartData = useCallback(() => {
     let labels = [];
@@ -265,9 +262,12 @@ function Dashboard({ state }) {
       }
     }
     
-    // Trigger useEffect by changing state slightly
-    setChartPeriod(prev => prev);
-  }, []);
+    // Trigger useEffect by toggling activeView briefly if we're on dashboard
+    if (!activeView) {
+      setActiveView('refresh');
+      setTimeout(() => setActiveView(null), 1);
+    }
+  }, [activeView]);
 
   useEffect(() => {
     // Chart for sales based on selected period - only if Chart.js is available
@@ -308,6 +308,7 @@ function Dashboard({ state }) {
           } 
         },
         responsive: true,
+        maintainAspectRatio: false,
         scales: chartType === 'pie' ? {} : {
           y: {
             beginAtZero: true,
@@ -320,7 +321,7 @@ function Dashboard({ state }) {
         }
       },
     });
-  }, [state.bills, chartPeriod, customDateRange, chartType, generateChartData]);
+  }, [state.bills, chartPeriod, customDateRange, chartType, generateChartData, activeView]);
 
   useEffect(() => {
     // Hourly chart for today's sales
@@ -351,6 +352,7 @@ function Dashboard({ state }) {
       options: { 
         plugins: { legend: { display: false } },
         responsive: true,
+        maintainAspectRatio: false,
         scales: {
           y: {
             beginAtZero: true,
@@ -363,7 +365,7 @@ function Dashboard({ state }) {
         }
       },
     });
-  }, [state.bills, generateHourlyData]);
+  }, [state.bills, generateHourlyData, activeView]);
 
   // Render detailed views
   const renderDetailView = () => {
@@ -382,177 +384,282 @@ function Dashboard({ state }) {
   };
 
   // Detailed view for Total Sales
-  const renderSalesDetail = () => (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-        <button onClick={() => setActiveView(null)} style={{ marginRight: 12 }}>
-          ← Back to Dashboard
-        </button>
-        <h2 style={{ margin: 0 }}>All Sales Transactions</h2>
-      </div>
-      {state.bills.length === 0 ? (
-        <div className="muted">No sales transactions yet.</div>
-      ) : (
-        <div className="table-wrapper">
-          <table className="table">
-          <thead>
-            <tr>
-              <th>Invoice No</th>
-              <th>Customer</th>
-              <th>Total</th>
-              <th>Status</th>
-              <th>Date</th>
-            </tr>
-          </thead>
-          <tbody>
-            {state.bills.map((b) => (
-              <tr key={b.id}>
-                <td>{b.invoiceNo}</td>
-                <td>{b.customer?.name || '-'}</td>
-                <td>{currency(b.total)}</td>
-                <td>
-                  <span className={`pill ${b.status === 'Paid' ? 'ok' : 'bad'}`}>
-                    {b.status}
-                  </span>
-                </td>
-                <td>{new Date(b.createdAt).toLocaleString()}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
-      )}
-    </div>
-  );
+  const renderSalesDetail = () => {
+    // Get period-specific bills for display
+    let startDate, endDate;
 
-  // Detailed view for Total Customers
-  const renderCustomersDetail = () => (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-        <button onClick={() => setActiveView(null)} style={{ marginRight: 12 }}>
-          ← Back to Dashboard
-        </button>
-        <h2 style={{ margin: 0 }}>All Customers</h2>
-      </div>
-      {state.customers.length === 0 ? (
-        <div className="muted">No customers yet.</div>
-      ) : (
-        <div className="table-wrapper">
-          <table className="table">
-          <thead>
-            <tr>
-              <th>Name</th>
-              <th>Phone</th>
-              <th>Religion</th>
-              <th>General</th>
-              <th>Last Purchase</th>
-            </tr>
-          </thead>
-          <tbody>
-            {state.customers.map((c) => {
-              const lastBill = state.bills.find((b) => b.customer?.id === c.id);
-              return (
-                <tr key={c.id}>
-                  <td>{c.name}</td>
-                  <td>{c.phone || <span className="muted">-</span>}</td>
-                  <td>{c.religion || <span className="muted">-</span>}</td>
+    if (chartPeriod === 'custom') {
+      startDate = new Date(customDateRange.start);
+      endDate = new Date(customDateRange.end);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      const range = getDateRange(chartPeriod);
+      
+      if (range.startDate) {
+        startDate = new Date(range.startDate);
+      } else {
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - (range.days - 1));
+      }
+      
+      if (range.endDate) {
+        endDate = new Date(range.endDate);
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        endDate = new Date();
+        endDate.setHours(23, 59, 59, 999);
+      }
+    }
+
+    const periodBills = state.bills.filter((bill) => {
+      const billDate = new Date(bill.createdAt);
+      return billDate >= startDate && billDate <= endDate;
+    });
+
+    return (
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+          <button onClick={() => setActiveView(null)} style={{ marginRight: 12 }}>
+            ← Back to Dashboard
+          </button>
+          <h2 style={{ margin: 0 }}>Sales Transactions {periodData.periodTitle}</h2>
+        </div>
+        {periodBills.length === 0 ? (
+          <div className="muted">No sales transactions for this period.</div>
+        ) : (
+          <div className="table-wrapper">
+            <table className="table">
+            <thead>
+              <tr>
+                <th>Invoice No</th>
+                <th>Customer</th>
+                <th>Total</th>
+                <th>Status</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              {periodBills.map((b) => (
+                <tr key={b.id}>
+                  <td>{b.invoiceNo}</td>
+                  <td>{b.customer?.name || '-'}</td>
+                  <td>{currency(b.total)}</td>
                   <td>
-                    <span className={`pill ${c.general ? 'ok' : 'bad'}`}>
-                      {c.general ? 'Yes' : 'No'}
+                    <span className={`pill ${b.status === 'Paid' ? 'ok' : 'bad'}`}>
+                      {b.status}
                     </span>
                   </td>
+                  <td>{new Date(b.createdAt).toLocaleString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Detailed view for Total Customers
+  const renderCustomersDetail = () => {
+    // Get period-specific customers for display
+    let startDate, endDate;
+
+    if (chartPeriod === 'custom') {
+      startDate = new Date(customDateRange.start);
+      endDate = new Date(customDateRange.end);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      const range = getDateRange(chartPeriod);
+      
+      if (range.startDate) {
+        startDate = new Date(range.startDate);
+      } else {
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - (range.days - 1));
+      }
+      
+      if (range.endDate) {
+        endDate = new Date(range.endDate);
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        endDate = new Date();
+        endDate.setHours(23, 59, 59, 999);
+      }
+    }
+
+    // Get customers who made purchases in the period
+    const periodBills = state.bills.filter((bill) => {
+      const billDate = new Date(bill.createdAt);
+      return billDate >= startDate && billDate <= endDate;
+    });
+    
+    const periodCustomerIds = new Set(periodBills.map(b => b.customer?.id).filter(Boolean));
+    const periodCustomers = state.customers.filter(c => periodCustomerIds.has(c.id));
+
+    return (
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+          <button onClick={() => setActiveView(null)} style={{ marginRight: 12 }}>
+            ← Back to Dashboard
+          </button>
+          <h2 style={{ margin: 0 }}>Customers {periodData.periodTitle}</h2>
+        </div>
+        {periodCustomers.length === 0 ? (
+          <div className="muted">No customers made purchases in this period.</div>
+        ) : (
+          <div className="table-wrapper">
+            <table className="table">
+            <thead>
+              <tr>
+                <th>Name</th>
+                <th>Phone</th>
+                <th>Religion</th>
+                <th>General</th>
+                <th>Last Purchase in Period</th>
+              </tr>
+            </thead>
+            <tbody>
+              {periodCustomers.map((c) => {
+                const lastBillInPeriod = periodBills
+                  .filter((b) => b.customer?.id === c.id)
+                  .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+                return (
+                  <tr key={c.id}>
+                    <td>{c.name}</td>
+                    <td>{c.phone || <span className="muted">-</span>}</td>
+                    <td>{c.religion || <span className="muted">-</span>}</td>
+                    <td>
+                      <span className={`pill ${c.general ? 'ok' : 'bad'}`}>
+                        {c.general ? 'Yes' : 'No'}
+                      </span>
+                    </td>
+                    <td>
+                      {lastBillInPeriod ? (
+                        new Date(lastBillInPeriod.createdAt).toLocaleString()
+                      ) : (
+                        <span className="muted">No purchase in period</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Detailed view for Pending Bills with WhatsApp functionality
+  const renderPendingBillsDetail = () => {
+    // Get period-specific pending bills for display
+    let startDate, endDate;
+
+    if (chartPeriod === 'custom') {
+      startDate = new Date(customDateRange.start);
+      endDate = new Date(customDateRange.end);
+      endDate.setHours(23, 59, 59, 999);
+    } else {
+      const range = getDateRange(chartPeriod);
+      
+      if (range.startDate) {
+        startDate = new Date(range.startDate);
+      } else {
+        startDate = new Date();
+        startDate.setDate(startDate.getDate() - (range.days - 1));
+      }
+      
+      if (range.endDate) {
+        endDate = new Date(range.endDate);
+        endDate.setHours(23, 59, 59, 999);
+      } else {
+        endDate = new Date();
+        endDate.setHours(23, 59, 59, 999);
+      }
+    }
+
+    const periodPendingBills = state.bills.filter((bill) => {
+      const billDate = new Date(bill.createdAt);
+      return bill.status === 'Pending' && billDate >= startDate && billDate <= endDate;
+    });
+
+    return (
+      <div>
+        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
+          <button onClick={() => setActiveView(null)} style={{ marginRight: 12 }}>
+            ← Back to Dashboard
+          </button>
+          <h2 style={{ margin: 0 }}>Pending Bills {periodData.periodTitle}</h2>
+        </div>
+        {periodPendingBills.length === 0 ? (
+          <div className="muted">No pending bills for this period.</div>
+        ) : (
+          <div className="table-wrapper">
+            <table className="table">
+            <thead>
+              <tr>
+                <th>Invoice No</th>
+                <th>Customer</th>
+                <th>Phone</th>
+                <th>Total</th>
+                <th>Date</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {periodPendingBills.map((b) => (
+                <tr key={b.id}>
+                  <td>{b.invoiceNo}</td>
+                  <td>{b.customer?.name || '-'}</td>
+                  <td>{b.customer?.phone || <span className="muted">-</span>}</td>
+                  <td>{currency(b.total)}</td>
+                  <td>{new Date(b.createdAt).toLocaleString()}</td>
                   <td>
-                    {lastBill ? (
-                      new Date(lastBill.createdAt).toLocaleString()
+                    {b.customer?.phone ? (
+                      <button
+                        className="primary"
+                        onClick={() => {
+                          const invoiceLink = `${window.location.origin}/invoice/${b.invoiceNo}`;
+                          const msg = [
+                            `Payment Reminder - Invoice ${b.invoiceNo}`,
+                            `Dear ${b.customer?.name || 'Customer'},`,
+                            '',
+                            `Your payment for Invoice ${b.invoiceNo} is pending.`,
+                            `Amount Due: ${currency(b.total)}`,
+                            `Date: ${new Date(b.createdAt).toLocaleDateString()}`,
+                            '',
+                            'Items:',
+                            ...b.items.map(
+                              (i) => `- ${i.name} x ${i.qty} = ${currency(i.qty * i.price)}`
+                            ),
+                            '',
+                            `Please make the payment at your earliest convenience.`,
+                            `View Invoice: ${invoiceLink}`,
+                            '',
+                            'Thank you for your business!',
+                            'Govinda Dughdalay'
+                          ].join('\n');
+                          const waLink = `https://wa.me/${(b.customer?.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
+                          window.open(waLink, '_blank');
+                        }}
+                      >
+                        Send WhatsApp Reminder
+                      </button>
                     ) : (
-                      <span className="muted">Never</span>
+                      <span className="muted">No Phone</span>
                     )}
                   </td>
                 </tr>
-              );
-            })}
-          </tbody>
-        </table>
-        </div>
-      )}
-    </div>
-  );
-
-  // Detailed view for Pending Bills with WhatsApp functionality
-  const renderPendingBillsDetail = () => (
-    <div>
-      <div style={{ display: 'flex', alignItems: 'center', marginBottom: 16 }}>
-        <button onClick={() => setActiveView(null)} style={{ marginRight: 12 }}>
-          ← Back to Dashboard
-        </button>
-        <h2 style={{ margin: 0 }}>Pending Bills</h2>
+              ))}
+            </tbody>
+          </table>
+          </div>
+        )}
       </div>
-      {pendingBills.length === 0 ? (
-        <div className="muted">No pending bills.</div>
-      ) : (
-        <div className="table-wrapper">
-          <table className="table">
-          <thead>
-            <tr>
-              <th>Invoice No</th>
-              <th>Customer</th>
-              <th>Phone</th>
-              <th>Total</th>
-              <th>Date</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {pendingBills.map((b) => (
-              <tr key={b.id}>
-                <td>{b.invoiceNo}</td>
-                <td>{b.customer?.name || '-'}</td>
-                <td>{b.customer?.phone || <span className="muted">-</span>}</td>
-                <td>{currency(b.total)}</td>
-                <td>{new Date(b.createdAt).toLocaleString()}</td>
-                <td>
-                  {b.customer?.phone ? (
-                    <button
-                      className="primary"
-                      onClick={() => {
-                        const invoiceLink = `${window.location.origin}/invoice/${b.invoiceNo}`;
-                        const msg = [
-                          `Payment Reminder - Invoice ${b.invoiceNo}`,
-                          `Dear ${b.customer?.name || 'Customer'},`,
-                          '',
-                          `Your payment for Invoice ${b.invoiceNo} is pending.`,
-                          `Amount Due: ${currency(b.total)}`,
-                          `Date: ${new Date(b.createdAt).toLocaleDateString()}`,
-                          '',
-                          'Items:',
-                          ...b.items.map(
-                            (i) => `- ${i.name} x ${i.qty} = ${currency(i.qty * i.price)}`
-                          ),
-                          '',
-                          `Please make the payment at your earliest convenience.`,
-                          `View Invoice: ${invoiceLink}`,
-                          '',
-                          'Thank you for your business!',
-                          'Govinda Dughdalay'
-                        ].join('\n');
-                        const waLink = `https://wa.me/${(b.customer?.phone || '').replace(/\D/g, '')}?text=${encodeURIComponent(msg)}`;
-                        window.open(waLink, '_blank');
-                      }}
-                    >
-                      Send WhatsApp Reminder
-                    </button>
-                  ) : (
-                    <span className="muted">No Phone</span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        </div>
-      )}
-    </div>
-  );
+    );
+  };
 
   // Detailed view for Low Stock Products
   const renderLowStockDetail = () => (
@@ -610,7 +717,7 @@ function Dashboard({ state }) {
   );
 
   // If a detailed view is active, render it instead of the dashboard
-  if (activeView) {
+  if (activeView && activeView !== 'refresh') {
     return renderDetailView();
   }
 
@@ -763,7 +870,9 @@ function Dashboard({ state }) {
       {window.Chart ? (
         <div style={{ marginBottom: 32 }}>
           <h4 style={{ margin: '16px 0 8px 0' }}>{generateChartData().title}</h4>
-          <canvas id="salesChart" height={80} style={{ maxWidth: '100%', height: '400px' }}></canvas>
+          <div style={{ position: 'relative', height: '400px', width: '100%' }}>
+            <canvas id="salesChart" style={{ maxWidth: '100%', width: '100%', height: '100%' }}></canvas>
+          </div>
         </div>
       ) : (
         <div className="muted" style={{ marginBottom: 32 }}>
@@ -775,7 +884,9 @@ function Dashboard({ state }) {
       {window.Chart && (
         <div>
           <h4 style={{ margin: '16px 0 8px 0' }}>Today&apos;s Sales by Hour</h4>
-          <canvas id="hourlyChart" height={60} style={{ maxWidth: '100%', height: '300px' }}></canvas>
+          <div style={{ position: 'relative', height: '300px', width: '100%' }}>
+            <canvas id="hourlyChart" style={{ maxWidth: '100%', width: '100%', height: '100%' }}></canvas>
+          </div>
         </div>
       )}
     </div>
