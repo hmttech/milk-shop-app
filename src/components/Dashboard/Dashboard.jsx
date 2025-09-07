@@ -1,8 +1,14 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { currency } from '../../utils/helpers.js';
 
 function Dashboard({ state }) {
   const [activeView, setActiveView] = useState(null);
+  const [chartPeriod, setChartPeriod] = useState('days'); // 'days', 'month', 'custom'
+  const [customDateRange, setCustomDateRange] = useState({
+    start: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    end: new Date().toISOString().split('T')[0]
+  });
+  const [chartType, setChartType] = useState('bar'); // 'bar', 'line'
   // Total sales
   const totalSales = state.bills.reduce((sum, b) => sum + b.total, 0);
   // Total customers
@@ -12,8 +18,92 @@ function Dashboard({ state }) {
   // Low stock products
   const lowStockProducts = state.products.filter((p) => p.qty <= (p.lowAt ?? 5));
 
+  // Helper function to generate chart data based on period
+  const generateChartData = useCallback(() => {
+    let labels = [];
+    let salesData = [];
+    let title = '';
+
+    switch (chartPeriod) {
+      case 'days': {
+        title = 'Sales (Last 7 Days)';
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const dayStr = d.toLocaleDateString();
+          labels.push(dayStr);
+          const daySales = state.bills
+            .filter((b) => new Date(b.createdAt).toLocaleDateString() === dayStr)
+            .reduce((sum, b) => sum + b.total, 0);
+          salesData.push(daySales);
+        }
+        break;
+      }
+
+      case 'month': {
+        title = 'Sales (Last 30 Days)';
+        for (let i = 29; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const dayStr = d.toLocaleDateString();
+          labels.push(dayStr);
+          const daySales = state.bills
+            .filter((b) => new Date(b.createdAt).toLocaleDateString() === dayStr)
+            .reduce((sum, b) => sum + b.total, 0);
+          salesData.push(daySales);
+        }
+        break;
+      }
+
+      case 'custom': {
+        title = `Sales (${customDateRange.start} to ${customDateRange.end})`;
+        const startDate = new Date(customDateRange.start);
+        const endDate = new Date(customDateRange.end);
+        const diffTime = Math.abs(endDate - startDate);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        for (let i = 0; i <= diffDays; i++) {
+          const d = new Date(startDate);
+          d.setDate(startDate.getDate() + i);
+          const dayStr = d.toLocaleDateString();
+          labels.push(dayStr);
+          const daySales = state.bills
+            .filter((b) => new Date(b.createdAt).toLocaleDateString() === dayStr)
+            .reduce((sum, b) => sum + b.total, 0);
+          salesData.push(daySales);
+        }
+        break;
+      }
+
+      default:
+        title = 'Sales';
+    }
+
+    return { labels, salesData, title };
+  }, [chartPeriod, customDateRange, state.bills]);
+
+  // Helper function for time-wise analysis (hourly breakdown for today)
+  const generateHourlyData = useCallback(() => {
+    const labels = [];
+    const salesData = [];
+    const today = new Date().toLocaleDateString();
+    
+    for (let hour = 0; hour < 24; hour++) {
+      labels.push(`${hour}:00`);
+      const hourlySales = state.bills
+        .filter((b) => {
+          const billDate = new Date(b.createdAt);
+          return billDate.toLocaleDateString() === today && billDate.getHours() === hour;
+        })
+        .reduce((sum, b) => sum + b.total, 0);
+      salesData.push(hourlySales);
+    }
+    
+    return { labels, salesData, title: 'Today&apos;s Sales by Hour' };
+  }, [state.bills]);
+
   useEffect(() => {
-    // Simple chart for sales (last 7 days) - only if Chart.js is available
+    // Chart for sales based on selected period - only if Chart.js is available
     const ctx = document.getElementById('salesChart');
     if (!ctx || !window.Chart) return;
 
@@ -22,27 +112,81 @@ function Dashboard({ state }) {
       window.Chart.getChart(ctx).destroy();
     }
 
-    const days = [];
-    const sales = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dayStr = d.toLocaleDateString();
-      days.push(dayStr);
-      const daySales = state.bills
-        .filter((b) => new Date(b.createdAt).toLocaleDateString() === dayStr)
-        .reduce((sum, b) => sum + b.total, 0);
-      sales.push(daySales);
-    }
+    const chartData = generateChartData();
+    
     new window.Chart(ctx, {
-      type: 'bar',
+      type: chartType,
       data: {
-        labels: days,
-        datasets: [{ label: 'Sales (₹)', data: sales, backgroundColor: '#1b6' }],
+        labels: chartData.labels,
+        datasets: [{ 
+          label: 'Sales (₹)', 
+          data: chartData.salesData, 
+          backgroundColor: chartType === 'line' ? 'transparent' : '#1b6',
+          borderColor: '#1b6',
+          borderWidth: chartType === 'line' ? 2 : 0,
+          fill: chartType === 'line' ? false : true,
+          tension: chartType === 'line' ? 0.1 : 0
+        }],
       },
-      options: { plugins: { legend: { display: false } } },
+      options: { 
+        plugins: { legend: { display: false } },
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(value) {
+                return '₹' + value;
+              }
+            }
+          }
+        }
+      },
     });
-  }, [state.bills]);
+  }, [state.bills, chartPeriod, customDateRange, chartType, generateChartData]);
+
+  useEffect(() => {
+    // Hourly chart for today's sales
+    const ctx = document.getElementById('hourlyChart');
+    if (!ctx || !window.Chart) return;
+
+    // Clear any existing chart
+    if (window.Chart.getChart && window.Chart.getChart(ctx)) {
+      window.Chart.getChart(ctx).destroy();
+    }
+
+    const hourlyData = generateHourlyData();
+    
+    new window.Chart(ctx, {
+      type: 'line',
+      data: {
+        labels: hourlyData.labels,
+        datasets: [{ 
+          label: 'Sales (₹)', 
+          data: hourlyData.salesData, 
+          backgroundColor: 'transparent',
+          borderColor: '#e74c3c',
+          borderWidth: 2,
+          fill: false,
+          tension: 0.1
+        }],
+      },
+      options: { 
+        plugins: { legend: { display: false } },
+        responsive: true,
+        scales: {
+          y: {
+            beginAtZero: true,
+            ticks: {
+              callback: function(value) {
+                return '₹' + value;
+              }
+            }
+          }
+        }
+      },
+    });
+  }, [state.bills, generateHourlyData]);
 
   // Render detailed views
   const renderDetailView = () => {
@@ -330,12 +474,75 @@ function Dashboard({ state }) {
           <div style={{ fontSize: 22, margin: '8px 0' }}>{lowStockProducts.length}</div>
         </div>
       </div>
-      <h3 style={{ marginTop: 32 }}>Sales (Last 7 Days)</h3>
+      
+      {/* Chart Controls */}
+      <div style={{ marginTop: 32, marginBottom: 16 }}>
+        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '12px' }}>
+          <h3 style={{ margin: 0, marginRight: 16 }}>Sales Analytics</h3>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ fontSize: '0.9em', fontWeight: 'bold' }}>Period:</label>
+            <select 
+              value={chartPeriod} 
+              onChange={(e) => setChartPeriod(e.target.value)}
+              style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            >
+              <option value="days">Last 7 Days</option>
+              <option value="month">Last 30 Days</option>
+              <option value="custom">Custom Range</option>
+            </select>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <label style={{ fontSize: '0.9em', fontWeight: 'bold' }}>Chart Type:</label>
+            <select 
+              value={chartType} 
+              onChange={(e) => setChartType(e.target.value)}
+              style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
+            >
+              <option value="bar">Bar Chart</option>
+              <option value="line">Line Chart</option>
+            </select>
+          </div>
+
+          {chartPeriod === 'custom' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <label style={{ fontSize: '0.9em', fontWeight: 'bold' }}>From:</label>
+              <input
+                type="date"
+                value={customDateRange.start}
+                onChange={(e) => setCustomDateRange(prev => ({ ...prev, start: e.target.value }))}
+                style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
+              />
+              <label style={{ fontSize: '0.9em', fontWeight: 'bold' }}>To:</label>
+              <input
+                type="date"
+                value={customDateRange.end}
+                onChange={(e) => setCustomDateRange(prev => ({ ...prev, end: e.target.value }))}
+                style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #ccc' }}
+              />
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Main Sales Chart */}
       {window.Chart ? (
-        <canvas id="salesChart" height={80} style={{ maxWidth: 600 }}></canvas>
+        <div style={{ marginBottom: 32 }}>
+          <h4 style={{ margin: '16px 0 8px 0' }}>{generateChartData().title}</h4>
+          <canvas id="salesChart" height={80} style={{ maxWidth: '100%', height: '400px' }}></canvas>
+        </div>
       ) : (
-        <div className="muted">
+        <div className="muted" style={{ marginBottom: 32 }}>
           Chart.js not available. Please enable external scripts for charts.
+        </div>
+      )}
+
+      {/* Hourly Breakdown Chart */}
+      {window.Chart && (
+        <div>
+          <h4 style={{ margin: '16px 0 8px 0' }}>Today&apos;s Sales by Hour</h4>
+          <canvas id="hourlyChart" height={60} style={{ maxWidth: '100%', height: '300px' }}></canvas>
         </div>
       )}
     </div>
